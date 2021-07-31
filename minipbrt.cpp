@@ -7992,8 +7992,26 @@ namespace minipbrt {
 
   bool Parser::texture_param(const char* name, TextureData dataType, uint32_t* dest)
   {
+      const auto parse = [this](const char* name, char** dest, bool copy = false)
+      {
+        assert(name != nullptr);
+        assert(dest != nullptr);
+
+        const ParamInfo* paramDesc = find_param(name, ParamType::Texture);
+        if (paramDesc == nullptr || paramDesc->count != 1) {
+          return false;
+        }
+
+        char* src = reinterpret_cast<char*>(m_temp.data() + paramDesc->offset);
+        if (copy && *dest != nullptr) {
+          delete[] *dest;
+        }
+        *dest = copy ? copy_string(src) : src;
+        return true;
+      };
+
     char* textureName = nullptr;
-    if (!string_param(name, &textureName)) {
+    if (!parse(name, &textureName)) {
       return false;
     }
 
@@ -8188,6 +8206,18 @@ namespace minipbrt {
         }
       }
       break;
+    }
+
+    // Fallback: search global texture list
+    {
+        uint32_t texIdx = 0;
+        for(const Texture* tex :  m_scene->textures)
+        {
+          if (tex != nullptr && tex->name != nullptr && std::strcmp(name, tex->name) == 0) {
+            return texIdx;
+          }
+          ++texIdx;
+        }
     }
 
     return kInvalidIndex;
