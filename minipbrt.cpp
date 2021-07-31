@@ -4445,6 +4445,7 @@ namespace minipbrt {
     trimesh->copy_common_properties(this);
     trimesh->alpha = alpha;
     trimesh->shadowalpha = shadowalpha;
+    trimesh->name = copy_string(filename);
 
     return trimesh;
   }

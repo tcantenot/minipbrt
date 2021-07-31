@@ -1173,6 +1173,7 @@ namespace minipbrt {
 
 
   struct TriangleMesh : public Shape {
+    char* name                = nullptr;
     int* indices              = nullptr;
     unsigned int num_indices  = 0;
     float* P                  = nullptr; // Elements 3i, 3i+1 and 3i+2 are the xyz position components for vertex i.
@@ -1184,6 +1185,7 @@ namespace minipbrt {
     uint32_t shadowalpha      = kInvalidIndex;
 
     virtual ~TriangleMesh() override {
+      delete[] name;
       delete[] indices;
       delete[] P;
       delete[] N;
