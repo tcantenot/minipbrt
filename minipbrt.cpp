@@ -5480,7 +5480,8 @@ namespace minipbrt {
 
     if(!m_inWorld)
     {
-        m_scene->lookat = new LookAt();
+        if(!m_scene->lookat)
+            m_scene->lookat = new LookAt();
 
         m_scene->lookat->eye[0] = pos.x;
         m_scene->lookat->eye[1] = pos.y;
@@ -5540,6 +5541,27 @@ namespace minipbrt {
     m.rows[2][3] = float_arg(14);
     m.rows[3][3] = float_arg(15);
     m_transforms->transform(m);
+
+    if(!m_inWorld)
+    {
+        if(!m_scene->lookat)
+            m_scene->lookat = new LookAt();
+
+        Mat4 viewToWorld = inverse(m);
+
+        m_scene->lookat->eye[0] = viewToWorld.rows[0][3];
+        m_scene->lookat->eye[1] = viewToWorld.rows[1][3];
+        m_scene->lookat->eye[2] = viewToWorld.rows[2][3];
+
+        m_scene->lookat->target[0] = viewToWorld.rows[0][3] + viewToWorld.rows[0][2];
+        m_scene->lookat->target[1] = viewToWorld.rows[1][3] + viewToWorld.rows[1][2];
+        m_scene->lookat->target[2] = viewToWorld.rows[2][3] + viewToWorld.rows[2][2];
+
+        m_scene->lookat->up[0] = viewToWorld.rows[0][1];
+        m_scene->lookat->up[1] = viewToWorld.rows[1][1];
+        m_scene->lookat->up[2] = viewToWorld.rows[2][1];
+    }
+
     return true;
   }
 
