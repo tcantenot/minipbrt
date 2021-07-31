@@ -189,6 +189,15 @@ namespace minipbrt {
 
 
   //
+  // Look at transform
+  //
+  struct LookAt {
+    float eye[3];
+    float target[3];
+    float up[3];
+  };
+
+  //
   // Accelerator types
   //
 
@@ -1446,6 +1455,7 @@ namespace minipbrt {
     float startTime          = 0.0f;
     float endTime            = 0.0f;
 
+    LookAt* lookat           = nullptr;
     Accelerator* accelerator = nullptr;
     Camera* camera           = nullptr;
     Film* film               = nullptr;

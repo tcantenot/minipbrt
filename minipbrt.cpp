@@ -4462,6 +4462,7 @@ namespace minipbrt {
 
   Scene::~Scene()
   {
+    delete lookat;
     delete accelerator;
     delete camera;
     delete film;
@@ -5476,6 +5477,24 @@ namespace minipbrt {
     Vec3 target{ float_arg(3), float_arg(4), float_arg(5) };
     Vec3 up{ float_arg(6), float_arg(7), float_arg(8) };
     m_transforms->lookAt(pos, target, up);
+
+    if(!m_inWorld)
+    {
+        m_scene->lookat = new LookAt();
+
+        m_scene->lookat->eye[0] = pos.x;
+        m_scene->lookat->eye[1] = pos.y;
+        m_scene->lookat->eye[2] = pos.z;
+
+        m_scene->lookat->target[0] = target.x;
+        m_scene->lookat->target[1] = target.y;
+        m_scene->lookat->target[2] = target.z;
+
+        m_scene->lookat->up[0] = up.x;
+        m_scene->lookat->up[1] = up.y;
+        m_scene->lookat->up[2] = up.z;
+    }
+
     return true;
   }
 
