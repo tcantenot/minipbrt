@@ -5476,6 +5476,9 @@ namespace minipbrt {
     Vec3 pos{ float_arg(0), float_arg(1), float_arg(2) };
     Vec3 target{ float_arg(3), float_arg(4), float_arg(5) };
     Vec3 up{ float_arg(6), float_arg(7), float_arg(8) };
+
+    up = normalize(up);
+
     m_transforms->lookAt(pos, target, up);
 
     if(!m_inWorld)
@@ -5549,6 +5552,9 @@ namespace minipbrt {
 
         Mat4 viewToWorld = inverse(m);
 
+        Vec3 up = { viewToWorld.rows[0][1], viewToWorld.rows[1][1], viewToWorld.rows[2][1] };
+        up = normalize(up);
+
         m_scene->lookat->eye[0] = viewToWorld.rows[0][3];
         m_scene->lookat->eye[1] = viewToWorld.rows[1][3];
         m_scene->lookat->eye[2] = viewToWorld.rows[2][3];
@@ -5557,9 +5563,9 @@ namespace minipbrt {
         m_scene->lookat->target[1] = viewToWorld.rows[1][3] + viewToWorld.rows[1][2];
         m_scene->lookat->target[2] = viewToWorld.rows[2][3] + viewToWorld.rows[2][2];
 
-        m_scene->lookat->up[0] = viewToWorld.rows[0][1];
-        m_scene->lookat->up[1] = viewToWorld.rows[1][1];
-        m_scene->lookat->up[2] = viewToWorld.rows[2][1];
+        m_scene->lookat->up[0] = up.x;
+        m_scene->lookat->up[1] = up.y;
+        m_scene->lookat->up[2] = up.z;
     }
 
     return true;
