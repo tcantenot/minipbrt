@@ -298,7 +298,7 @@ namespace minipbrt {
     float lensradius        = 0.0f;
     float focaldistance     = 1e30f;
     float fov               = 90.0f;
-    float halffov           = 45.0f;
+    float halffov           = 0.0f;
 
     virtual ~PerspectiveCamera() override {}
     virtual CameraType type() const override { return CameraType::Perspective; }
