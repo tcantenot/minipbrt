@@ -8132,14 +8132,31 @@ namespace minipbrt {
     if (name == nullptr || name[0] == '\0') {
       return kInvalidIndex;
     }
-    for (int i = int(m_attrs->entry); i >= 0; --i) {
-      for (uint32_t matIdx : m_attrs->attrs[i].materials) {
-        const Material* mat = m_scene->materials[matIdx];
-        if (mat != nullptr && mat->name != nullptr && std::strcmp(name, mat->name) == 0) {
-          return matIdx;
+
+    if(m_attrs->entry > 0)
+    {
+        for (int i = int(m_attrs->entry); i >= 0; --i) {
+          for (uint32_t matIdx : m_attrs->attrs[i].materials) {
+            const Material* mat = m_scene->materials[matIdx];
+            if (mat != nullptr && mat->name != nullptr && std::strcmp(name, mat->name) == 0) {
+              return matIdx;
+            }
+          }
         }
-      }
+
     }
+
+    // Fallback: search global materials list
+    {
+        uint32_t matIdx = 0;
+        for (const Material* mat : m_scene->materials) {
+            if (mat != nullptr && mat->name != nullptr && std::strcmp(name, mat->name) == 0) {
+              return matIdx;
+            }
+            ++matIdx;
+          }
+    }
+
     return kInvalidIndex;
   }
 
