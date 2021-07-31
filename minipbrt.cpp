@@ -5638,7 +5638,8 @@ namespace minipbrt {
     if (m_inWorld && inside[0] != '\0') {
       insideMedium = find_medium(inside);
       if (insideMedium == kInvalidIndex) {
-        // TODO: warn/error about invalid medium name
+            printf("parse_MediumInterface: Medium '%s' not found\n", inside);
+            m_tokenizer.set_error("parse_MediumInterface: Medium '%s' not found", inside);
       }
     }
 
@@ -5646,7 +5647,8 @@ namespace minipbrt {
     if (outside[0] != '\0') {
       outsideMedium = find_medium(outside);
       if (outsideMedium == kInvalidIndex) {
-        // TODO: warn/error about invalid medium name.
+        printf("parse_MediumInterface: Medium '%s' not found\n", outside);
+        m_tokenizer.set_error("parse_MediumInterface: Medium '%s' not found", outside);
       }
     }
 
@@ -6659,7 +6661,8 @@ namespace minipbrt {
     const char* name = string_arg(0);
     uint32_t material = find_material(name);
     if (material == kInvalidIndex) {
-      // TODO: warn/error about invalid material name.
+        printf("parse_NamedMaterial: Material '%s' not found\n", name);
+        m_tokenizer.set_error("parse_NamedMaterial: Material '%s' not found", name);
     }
     else {
       m_attrs->top->activeMaterial = material;
