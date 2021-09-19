@@ -4110,6 +4110,9 @@ namespace minipbrt {
     attrs[entry + 1].insideMedium       = attrs[entry].insideMedium;
     attrs[entry + 1].outsideMedium      = attrs[entry].outsideMedium;
     attrs[entry + 1].reverseOrientation = attrs[entry].reverseOrientation;
+    attrs[entry + 1].floatTextures      = attrs[entry].floatTextures;
+    attrs[entry + 1].spectrumTextures   = attrs[entry].spectrumTextures;
+    attrs[entry + 1].materials          = attrs[entry].materials;
 
     ++entry;
     top = attrs + entry;
@@ -6162,6 +6165,7 @@ namespace minipbrt {
     uint32_t material = kInvalidIndex;
     if (parse_material_common(materialType, nullptr, &material)) {
       m_attrs->top->activeMaterial = material;
+      m_attrs->top->materials.push_back((uint32_t)m_scene->materials.size()-1);
       return true;
     }
     return false;
@@ -6976,6 +6980,29 @@ namespace minipbrt {
 
     // TODO: add the texture to the name map for the current AttributeBegin/End block.
     m_scene->textures.push_back(texture);
+
+    switch(texture->dataType)
+    {
+        case TextureData::Float:
+        {
+            m_attrs->top->floatTextures.push_back((uint32_t)m_scene->textures.size()-1);
+            break;
+        }
+
+        case TextureData::Spectrum:
+        case TextureData::Color:
+        {
+            m_attrs->top->spectrumTextures.push_back((uint32_t)m_scene->textures.size()-1);
+            break;
+        }
+
+        default:
+        {
+            m_tokenizer.set_error("Unknown TextureData type");
+            break;
+        }
+    }
+
     return true;
   }
 

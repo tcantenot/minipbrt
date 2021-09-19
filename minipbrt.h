@@ -1230,6 +1230,7 @@ namespace minipbrt {
   enum class TextureData {
     Float,
     Spectrum,
+    Color // Synonym of Spectrum
   };
 
 
