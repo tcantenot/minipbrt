@@ -8285,18 +8285,6 @@ namespace minipbrt {
       break;
     }
 
-    // Fallback: search global texture list
-    {
-        uint32_t texIdx = 0;
-        for(const Texture* tex :  m_scene->textures)
-        {
-          if (tex != nullptr && tex->name != nullptr && std::strcmp(name, tex->name) == 0) {
-            return texIdx;
-          }
-          ++texIdx;
-        }
-    }
-
     return kInvalidIndex;
   }
 
