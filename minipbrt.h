@@ -1053,12 +1053,14 @@ namespace minipbrt {
     float width0              = 1.0f;
     float width1              = 1.0f;
     int splitdepth            = 3;
+    int quality               = 1; // 0: low | 1: high -> used to determine the number of subdivisions when dicing the curve into a triangle mesh
 
     virtual ~Curve() override {
       delete[] P;
       delete[] N;
     }
     virtual ShapeType type() const override { return ShapeType::Curve; }
+    virtual TriangleMesh* triangle_mesh() const override;
   };
 
 

@@ -39,6 +39,9 @@ SOFTWARE.
 
 #define MINIPBRT_STATIC_ARRAY_LENGTH(arr)  static_cast<uint32_t>(sizeof(arr) / sizeof((arr)[0]))
 
+#ifndef PI
+#define PI 3.14159265358979323846f
+#endif
 
 /// miniply - A simple and fast parser for PLY files
 /// ================================================
@@ -2829,6 +2832,17 @@ namespace minipbrt {
 
   static const float CIE_Y_integral = 106.856895f;
 
+  //
+  // Vec2 type
+  //
+
+  struct Vec2 {
+    float x, y;
+
+    
+    Vec2() { }
+    Vec2(float xx, float yy): x(xx), y(yy) { }
+  };
 
   //
   // Vec3 type
@@ -2836,15 +2850,46 @@ namespace minipbrt {
 
   struct Vec3 {
     float x, y, z;
+
+    Vec3() { }
+    Vec3(float xx, float yy, float zz): x(xx), y(yy), z(zz) { }
   };
 
+  static inline Vec3 operator + (Vec3 lhs, Vec3 rhs) { return Vec3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z }; }
   static inline Vec3 operator - (Vec3 lhs, Vec3 rhs) { return Vec3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z }; }
+  static inline Vec3 operator * (float x, Vec3 v) { return Vec3{ v.x * x, v.y * x, v.z * x }; }
 
   static inline float dot(Vec3 lhs, Vec3 rhs) { return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z; }
-  static inline float length(Vec3 v) { return std::sqrt(dot(v, v)); }
+  static inline float length2(Vec3 v) { return dot(v, v); }
+  static inline float length(Vec3 v) { return std::sqrt(length2(v)); }
   static inline Vec3 normalize(Vec3 v) { float len = length(v); return Vec3{ v.x / len, v.y / len, v.z / len }; }
   static inline Vec3 cross(Vec3 lhs, Vec3 rhs) { return Vec3{ lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x }; }
 
+
+  template <typename T, typename U, typename V>
+  inline constexpr T Clamp(T val, U low, V high) {
+    if (val < low)
+        return T(low);
+    else if (val > high)
+        return T(high);
+    else
+        return val;
+    }
+
+  inline float SafeASin(float x)
+  {
+    return std::asin(Clamp(x, -1, 1));
+}
+
+  // Equivalent to std::acos(Dot(a, b)), but more numerically stable.
+  // via http://www.plunk.org/~hatch/rightway.php
+  static inline float anglebetween(Vec3 lhs, Vec3 rhs)
+  {
+    if (dot(lhs, rhs) < 0)
+        return PI - 2.f * SafeASin(length(lhs + rhs) / 2.f);
+    else
+        return 2.f * SafeASin(length(rhs - lhs) / 2.f);
+  }
 
   //
   // Mat4 type
@@ -4254,6 +4299,406 @@ namespace minipbrt {
     outsideMedium      = other->outsideMedium;
     reverseOrientation = other->reverseOrientation;
     instanced          = other->instanced;
+  }
+
+
+  //
+  // Curve methods
+  //
+
+  // https://github.com/mmp/pbrt-v4/blob/master/src/pbrt/util/splines.h
+
+  Vec3 Lerp(Vec3 const & lhs, Vec3 const & rhs, float t)
+  {
+    return Vec3(
+        (1.f - t) * lhs.x + t * rhs.x,
+        (1.f - t) * lhs.y + t * rhs.y,
+        (1.f - t) * lhs.z + t * rhs.z
+    );
+  }
+
+  inline void ElevateQuadraticBezierToCubic(Vec3 (&outPoints)[4], Vec3 const * cp)//Vec3 cp[3])
+  {
+      outPoints[0] = cp[0];
+      outPoints[1] = Lerp(cp[0], cp[1], 2.f / 3.f);
+      outPoints[2] = Lerp(cp[1], cp[2], 1.f / 3.f);
+      outPoints[3] = cp[2];
+  }
+
+  inline void QuadraticBSplineToBezier(Vec3 (&outPoints)[3], Vec3 const * cp)//Vec3 cp[3])
+  {
+      // We can compute equivalent Bezier control points via some blossoming.
+      // We have three control points and a uniform knot vector; we will label
+      // the points p01, p12, and p23.  We want the Bezier control points of
+      // the equivalent curve, which are p11, p12, and p22.  We already have
+      // p12.
+      Vec3 p11 = Lerp(cp[0], cp[1], 0.5f);
+      Vec3 p22 = Lerp(cp[1], cp[2], 0.5f);
+
+      outPoints[0] = p11;
+      outPoints[1] = cp[1];
+      outPoints[2] = p22;
+  }
+
+  inline void CubicBSplineToBezier(Vec3 (&outPoints)[4], Vec3 const * cp)//Vec3 cp[4])
+  {
+      // Blossom from p012, p123, p234, and p345 to the Bezier control points
+      // p222, p223, p233, and p333.
+      // https://people.eecs.berkeley.edu/~sequin/CS284/IMGS/cubicbsplinepoints.gif
+      Vec3 p012 = cp[0], p123 = cp[1], p234 = cp[2], p345 = cp[3];
+
+      Vec3 p122 = Lerp(p012, p123, 2.f / 3.f);
+      Vec3 p223 = Lerp(p123, p234, 1.f / 3.f);
+      Vec3 p233 = Lerp(p123, p234, 2.f / 3.f);
+      Vec3 p334 = Lerp(p234, p345, 1.f / 3.f);
+
+      Vec3 p222 = Lerp(p122, p223, 0.5f);
+      Vec3 p333 = Lerp(p233, p334, 0.5f);
+
+      outPoints[0] = p222;
+      outPoints[1] = p223;
+      outPoints[2] = p233;
+      outPoints[3] = p333;
+  }
+
+  template <typename P>
+  inline P BlossomCubicBezier(P p[4], float u0, float u1, float u2)
+  {
+      P a[3] = {Lerp(p[0], p[1], u0), Lerp(p[1], p[2], u0), Lerp(p[2], p[3], u0)};
+      P b[2] = {Lerp(a[0], a[1], u1), Lerp(a[1], a[2], u1)};
+      return Lerp(b[0], b[1], u2);
+  }
+
+  template <typename P>
+  inline P EvaluateCubicBezier(P cp[4], float u)
+  {
+      return BlossomCubicBezier(cp, u, u, u);
+  }
+
+  inline Vec3 EvaluateCubicBezier(Vec3 cp[4], float u, Vec3 *deriv)
+  {
+      Vec3 cp1[3] = {Lerp(cp[0], cp[1], u), Lerp(cp[1], cp[2], u), Lerp(cp[2], cp[3], u)};
+      Vec3 cp2[2] = {Lerp(cp1[0], cp1[1], u), Lerp(cp1[1], cp1[2], u)};
+      if (deriv)
+      {
+          // Compute B\'ezier curve derivative at $u$
+          if (length2(cp2[1] - cp2[0]) > 0)
+              *deriv = 3.f * (cp2[1] - cp2[0]);
+          else
+              *deriv = cp[3] - cp[0];
+      }
+      return Lerp(cp2[0], cp2[1], u);
+  }
+
+  inline void CoordinateSystem(Vec3 v1, Vec3 *v2, Vec3 *v3)
+  {
+      float sign = std::copysign(1.f, v1.z);
+      float a = -1 / (sign + v1.z);
+      float b = v1.x * v1.y * a;
+      *v2 = Vec3(1 + sign * (v1.x * v1.x) * a, sign * b, -sign * v1.x);
+      *v3 = Vec3(b, sign  + (v1.y * v1.y) * a, -v1.y);
+  }
+
+  TriangleMesh* Curve::triangle_mesh() const
+  {
+    if (degree != 2 && degree != 3)
+    {
+        printf("Error: Invalid degree %d: only degree 2 and 3 curves are supported.\n", degree);
+        return nullptr;
+    }
+
+    if (basis != CurveBasis::Bezier && basis != CurveBasis::BSpline)
+    {
+        printf("Error: "
+              "Invalid basis \"%d\": only \"bezier\" and \"bspline\" are "
+              "supported.\n",
+              (int)basis);
+        return nullptr;
+    }
+
+    int nSegments;
+    bool bezierBasis = (basis == CurveBasis::Bezier);
+    if (bezierBasis)
+    {
+        // After the first segment, which uses degree+1 control points,
+        // subsequent segments reuse the last control point of the previous
+        // one and then use degree more control points.
+        if (((num_P- 1 - degree) % degree) != 0)
+        {
+            printf("Error: "
+                  "Invalid number of control points %d: for the degree %d "
+                  "Bezier basis %d + n * %d are required, for n >= 0.\n",
+                  num_P, degree, degree + 1, degree);
+            return nullptr;
+        }
+        nSegments = (num_P - 1) / degree;
+    }
+    else
+    {
+        if (num_P < degree + 1)
+        {
+            printf("Error: "
+                  "Invalid number of control points %d: for the degree %d "
+                  "b-spline basis, must have >= %d.\n",
+                  num_P, degree, degree + 1);
+            return nullptr;
+        }
+        nSegments = num_P - degree;
+    }
+
+    assert(nSegments == num_segments);
+
+    if (N)
+    {
+        if (curvetype != CurveType::Ribbon)
+        {
+            printf("Warning: Curve normals are only used with \"ribbon\" type curves.\n");
+            //delete[] N;
+            //N = nullptr;
+        }
+        //else if (n.size() != nSegments + 1)
+        //{
+        //    printf("Error: "
+        //          "Invalid number of normals %d: must provide %d normals for "
+        //          "ribbon curves with %d segments.\n",
+        //          int(n.size()), nSegments + 1, nSegments);
+        //    return nullptr;
+        //}
+        
+        // TODO: normalize?
+        //for (Normal3f &nn : n)
+        //    Normalize(nn);
+    }
+    else if (curvetype == CurveType::Ribbon)
+    {
+        printf("Error: Must provide normals \"N\" at curve endpoints with ribbon "
+                   "curves.\n");
+        return nullptr;
+    }
+
+    // Start dicing...
+    const int nDiceU = quality == 1 ? 4 : 3; // nseg
+    const int nDiceV = quality == 1 ? 4 : 3; // nvert
+
+    std::vector<int> blpIndices;
+    std::vector<Vec3> blpP;
+    std::vector<Vec3> blpN;
+    std::vector<Vec2> blpUV;
+
+    blpIndices.reserve(nDiceU * nDiceV * 4);
+    blpP.reserve((nDiceU+1) * (nDiceV+1));
+    blpN.reserve((nDiceU+1) * (nDiceV+1));
+    blpUV.reserve((nDiceU+1) * (nDiceV+1));
+
+    int lastCPOffset = -1;
+    Vec3 segCpBezier[4];
+
+    for (int i = 0; i <= nDiceU; ++i)
+    {
+        float u = float(i) / float(nDiceU);
+        float width = (1.f - u) * width0 + u * width1;//Lerp(u, width0, width1);
+
+        int segmentIndex = int(u * nSegments);
+        if (segmentIndex == nSegments)  // u == 1...
+            --segmentIndex;
+
+        // Compute offset into original control points for current u
+        int cpOffset;
+        if (bezierBasis)
+            cpOffset = segmentIndex * degree;
+        else
+            // Uniform b-spline.
+            cpOffset = segmentIndex;
+
+        if (cpOffset != lastCPOffset) {
+            // update segCpBezier
+            if (bezierBasis) {
+                if (degree == 2) {
+                    // Elevate to degree 3.
+                    Vec3 const * cp = reinterpret_cast<Vec3 const *>(P) + cpOffset;
+                    ElevateQuadraticBezierToCubic(segCpBezier, cp);
+                } else {
+                    // All set.
+                    Vec3 const * cp = reinterpret_cast<Vec3 const *>(P) + cpOffset;
+                    for (int i = 0; i < 4; ++i)
+                        segCpBezier[i] = cp[i];
+                }
+            } else {
+                // Uniform b-spline.
+                if (degree == 2) {
+
+                    Vec3 bezCp[3];
+                    Vec3 const * cp = reinterpret_cast<Vec3 const *>(P) + cpOffset;
+                    QuadraticBSplineToBezier(bezCp, cp);
+                    ElevateQuadraticBezierToCubic(segCpBezier, bezCp);
+                } else {
+                    Vec3 const * cp = reinterpret_cast<Vec3 const *>(P) + cpOffset;
+                    CubicBSplineToBezier(segCpBezier, cp);
+                }
+            }
+            lastCPOffset = cpOffset;
+        }
+
+        float uSeg = (u * nSegments) - segmentIndex;
+        assert(uSeg >= 0 && uSeg <= 1);
+
+        Vec3 dpdu;
+        Vec3 p = EvaluateCubicBezier(segCpBezier, uSeg, &dpdu);
+
+        switch (curvetype)
+        {
+        case CurveType::Ribbon:
+        {
+            Vec3 const * n = reinterpret_cast<Vec3 const *>(N) + cpOffset;
+            float normalAngle = anglebetween(n[segmentIndex], n[segmentIndex + 1]);
+            float invSinNormalAngle = 1 / std::sin(normalAngle);
+
+            Vec3 nu;
+            if (normalAngle == 0)
+                nu = n[segmentIndex];
+            else {
+                float sin0 = std::sin((1 - uSeg) * normalAngle) * invSinNormalAngle;
+                float sin1 = std::sin(uSeg * normalAngle) * invSinNormalAngle;
+                nu = sin0 * n[segmentIndex] + sin1 * n[segmentIndex + 1];
+            }
+            Vec3 dpdv = width * normalize(cross(nu, dpdu));
+
+            blpP.push_back(p - 0.5f * dpdv);
+            blpP.push_back(p + 0.5f * dpdv);
+            blpUV.push_back(Vec2(u, 0));
+            blpUV.push_back(Vec2(u, 1));
+            blpN.push_back(n[segmentIndex]);
+            blpN.push_back(n[segmentIndex+1]);
+
+            if (i > 0) {
+                blpIndices.push_back(2 * (i - 1));
+                blpIndices.push_back(2 * (i - 1) + 1);
+                blpIndices.push_back(2 * i);
+                blpIndices.push_back(2 * i + 1);
+            }
+            break;
+        }
+        case CurveType::Flat:
+        case CurveType::Cylinder: {
+            Vec3 ortho[2];
+            CoordinateSystem(normalize(dpdu), &ortho[0], &ortho[1]);
+            ortho[0] = (width / 2.f) * ortho[0];
+            ortho[1] = (width / 2.f) * ortho[1];
+
+            // Repeat the first/last vertex so we can assign different
+            // texture coordinates...
+            for (int v = 0; v <= nDiceV; ++v) {
+                float angle = float(v) / nDiceV * 2.f * PI;
+                blpP.push_back(p + std::cos(angle) * ortho[0] + std::sin(angle) * ortho[1]);
+                blpN.push_back(Vec3(normalize(blpP.back() - p)));
+                blpUV.push_back(Vec2(u, float(v) / nDiceV));
+            }
+
+            if (i > 0) {
+                for (int v = 0; v < nDiceV; ++v) {
+                    // Indexing is funny due to doubled-up last vertex
+                    blpIndices.push_back((nDiceV + 1) * (i - 1) + v);
+                    blpIndices.push_back((nDiceV + 1) * (i - 1) + v + 1);
+                    blpIndices.push_back((nDiceV + 1) * i + v);
+                    blpIndices.push_back((nDiceV + 1) * i + v + 1);
+                }
+            }
+            break;
+        }
+        }
+    }
+
+    TriangleMesh* trimesh = new TriangleMesh();
+
+    // Incorrect! name filed must be allocated... do not do it since it can use a LOT of memory
+    // -> TODO: string interning
+    #if 0
+    switch(basis)
+    {
+        case CurveBasis::Bezier:
+        {
+            switch(curvetype)
+            {
+                case CurveType::Flat:
+                {
+                    trimesh->name = "Flat Bezier Curve";
+                    break;
+                }
+
+                case CurveType::Ribbon:
+                {
+                    trimesh->name = "Ribbon Bezier Curve";
+                    break;
+                }
+
+                case CurveType::Cylinder:
+                {
+                    trimesh->name = "Cylinder Bezier Curve";
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        case CurveBasis::BSpline:
+        {
+            switch(curvetype)
+            {
+                case CurveType::Flat:
+                {
+                    trimesh->name = "Flat BSpline Curve";
+                    break;
+                }
+
+                case CurveType::Ribbon:
+                {
+                    trimesh->name = "Ribbon BSpline Curve";
+                    break;
+                }
+
+                case CurveType::Cylinder:
+                {
+                    trimesh->name = "Cylinder BSpline Curve";
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    #endif
+
+    trimesh->num_vertices = uint32_t(blpP.size());
+    trimesh->P = new float[trimesh->num_vertices * 3];
+    std::memcpy(trimesh->P, blpP.data(), trimesh->num_vertices * sizeof(Vec3));
+
+    trimesh->N = new float[trimesh->num_vertices * 3];
+    std::memcpy(trimesh->N, blpN.data(), trimesh->num_vertices * sizeof(Vec3));
+
+    trimesh->uv = new float[trimesh->num_vertices * 2];
+    std::memcpy(trimesh->uv, blpUV.data(), trimesh->num_vertices * sizeof(Vec2));
+
+    assert(blpIndices.size() % 4 == 0);
+    trimesh->num_indices = uint32_t((blpIndices.size() / 4) * 2 * 3);
+    trimesh->indices = new int[trimesh->num_indices];
+
+    int const * pBLPIndices = blpIndices.data();
+    for(size_t i = 0, ti = 0, n = blpIndices.size(); i < n; i += 4)
+    {
+        // First triangle of bilinear patch
+        trimesh->indices[ti++] = pBLPIndices[i + 0];
+        trimesh->indices[ti++] = pBLPIndices[i + 1];
+        trimesh->indices[ti++] = pBLPIndices[i + 2];
+
+        // Second triangle of bilinear patch
+        trimesh->indices[ti++] = pBLPIndices[i + 2];
+        trimesh->indices[ti++] = pBLPIndices[i + 1];
+        trimesh->indices[ti++] = pBLPIndices[i + 3];
+    }
+
+    trimesh->copy_common_properties(this);
+
+    return trimesh;
   }
 
 
@@ -5788,6 +6233,7 @@ namespace minipbrt {
             if (!ok) {
               m_tokenizer.set_error("Invalid number of control points for a bspline curve with degree %d", curve->degree);
             }
+            curve->num_segments = curve->num_P - curve->degree;
           }
         }
         if (!ok) {
@@ -5820,6 +6266,7 @@ namespace minipbrt {
         if (!float_param("width1", &curve->width1) && hasWidth) {
           curve->width1 = width;
         }
+        int_param("quality", &curve->quality);
         int_param("splitdepth", &curve->splitdepth);
         shape = curve;
       }
