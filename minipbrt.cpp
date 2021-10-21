@@ -6641,6 +6641,8 @@ namespace minipbrt {
     uint32_t material = kInvalidIndex;
     if (parse_material_common(materialType, string_arg(0), &material)) {
       m_scene->materials[material]->name = copy_string(string_arg(0));
+      m_attrs->top->activeMaterial = material;
+      m_attrs->top->materials.push_back((uint32_t)m_scene->materials.size()-1);
       return true;
     }
     return false;
@@ -7093,6 +7095,9 @@ namespace minipbrt {
     if (!texture_param("bumpmap", TextureData::Float, &material->bumpmap)) {
       material->bumpmap = baseMaterial->bumpmap;
     }
+
+    if (baseMaterial->name != nullptr)
+        material->name = copy_string(baseMaterial->name);
 
     if (materialOut != nullptr) {
       *materialOut = uint32_t(m_scene->materials.size());
