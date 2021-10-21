@@ -6667,8 +6667,8 @@ namespace minipbrt {
         float_texture_param("spectrans",       &disney->spectrans);
         float_texture_param("speculartint",    &disney->speculartint);
         bool_param("thin", &disney->thin);
-        color_texture_param("difftrans",       &disney->difftrans);
-        color_texture_param("flatness",        &disney->flatness);
+        float_texture_param("difftrans",       &disney->difftrans);
+        float_texture_param("flatness",        &disney->flatness);
         material = disney;
       }
       break;
@@ -6886,8 +6886,8 @@ namespace minipbrt {
         float_texture_param_with_default("spectrans",       &dst->spectrans,       &src->spectrans);
         float_texture_param_with_default("speculartint",    &dst->speculartint,    &src->speculartint);
         bool_param_with_default         ("thin",            &dst->thin,            src->thin);
-        color_texture_param_with_default("difftrans",       &dst->difftrans,       &src->difftrans);
-        color_texture_param_with_default("flatness",        &dst->flatness,        &src->flatness);
+        float_texture_param_with_default("difftrans",       &dst->difftrans,       &src->difftrans);
+        float_texture_param_with_default("flatness",        &dst->flatness,        &src->flatness);
         material = dst;
       }
       break;

@@ -692,8 +692,8 @@ namespace minipbrt {
     FloatTex spectrans        = { kInvalidIndex, 0.0f               };
     FloatTex speculartint     = { kInvalidIndex, 0.0f               };
     bool thin                 = false;
-    ColorTex difftrans        = { kInvalidIndex, {1.0f, 1.0f, 1.0f} }; // only used if `thin == true`
-    ColorTex flatness         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} }; // only used if `thin == true`
+    FloatTex difftrans        = { kInvalidIndex, 1.0f               }; // only used if `thin == true`
+    FloatTex flatness         = { kInvalidIndex, 0.0f               }; // only used if `thin == true`
 
     virtual ~DisneyMaterial() override {}
     virtual MaterialType type() const override { return MaterialType::Disney; }
