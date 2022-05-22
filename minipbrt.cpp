@@ -33,6 +33,12 @@ SOFTWARE.
 #include <string>
 #include <unordered_map>
 
+#define K_USE_FAST_FLOAT() 1
+
+#if K_USE_FAST_FLOAT()
+#include "fast_float.h"
+#endif
+
 #ifndef _WIN32
 #include <errno.h>
 #endif
@@ -516,6 +522,18 @@ namespace miniply {
 
   static bool double_literal(const char* start, char const** end, double* val)
   {
+    #if K_USE_FAST_FLOAT()
+      double tmp = 0.0;
+      auto answer = fast_float::from_chars(start, start+30, tmp);
+
+      bool ok = (answer.ec == std::errc());
+
+      if (ok && val != nullptr) {
+          *val = static_cast<float>(tmp);
+          *end = answer.ptr;
+      }
+      return ok;
+   #else
     const char* pos = start;
 
     bool negative = false;
@@ -606,6 +624,7 @@ namespace miniply {
       *end = pos;
     }
     return true;
+    #endif
   }
 
 
@@ -3439,6 +3458,19 @@ namespace minipbrt {
 
   static bool double_literal(const char* start, char const** end, double* val)
   {
+      {
+        double tmp = 0.0;
+        auto answer = fast_float::from_chars(start, start+30, tmp);
+
+        bool ok = (answer.ec == std::errc());
+
+        if (ok && val != nullptr) {
+            *val = static_cast<float>(tmp);
+            *end = answer.ptr;
+        }
+        return ok;
+      }
+
     const char* pos = start;
 
     bool negative = false;
@@ -3531,14 +3563,25 @@ namespace minipbrt {
     return true;
   }
 
-
   static bool float_literal(const char* start, char const** end, float* val)
   {
-    double tmp = 0.0;
-    bool ok = double_literal(start, end, &tmp);
-    if (ok && val != nullptr) {
-      *val = static_cast<float>(tmp);
-    }
+      #if K_USE_FAST_FLOAT()
+        double tmp = 0.0;
+        auto answer = fast_float::from_chars(start, start+30, tmp);
+
+        bool ok = (answer.ec == std::errc());
+
+        if (ok && val != nullptr) {
+            *val = static_cast<float>(tmp);
+            *end = answer.ptr;
+        }
+      #else
+        double tmp = 0.0;
+         bool ok = double_literal(start, end, &tmp);
+           if (ok && val != nullptr) {
+          *val = static_cast<float>(tmp);
+        }
+      #endif
     return ok;
   }
 
