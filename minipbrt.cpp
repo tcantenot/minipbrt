@@ -3775,44 +3775,74 @@ namespace minipbrt {
   }
 
 
-  static void blackbody_to_xyz(const float blackbody[2], float xyz[3])
+  static float blackbody(float T, float wavelength)
+
   {
     const float c = 299792458.0f;
     const float h = 6.62606957e-34f;
     const float kb = 1.3806488e-23f;
 
-    float t = blackbody[0]; // temperature in Kelvin
+    // Calculate `Le`, the amount of light emitted at wavelength = `wl`.
+    // `wl` is deliberately chose to match the wavelengths at which the X, Y
+    // and Z curves are sampled.
+    float l = wavelength * 1e-9f;
+    float lambda5 = (l * l) * (l * l) * l;
+    return (2.0f * h * c * c) / (lambda5 * (std::exp((h * c) / (l * kb  * T)) - 1));
+  }
+
+  static void blackbody_to_xyz(const float T, float xyz[3])
+  {
+    const float c = 299792458.0f;
+    const float h = 6.62606957e-34f;
+    const float kb = 1.3806488e-23f;
 
     xyz[0] = 0.0f;
     xyz[1] = 0.0f;
     xyz[2] = 0.0f;
-    for (int i = 0; i < nSpectralSamples; i++) {
+    for (int i = 0; i < nSpectralSamples; i++)
+    {
       float wl = lerp(float(i) / float(nSpectralSamples), sampledLambdaStart, sampledLambdaEnd);
 
-      // Calculate `Le`, the amount of light emitted at wavelength = `wl`.
-      // `wl` is deliberately chose to match the wavelengths at which the X, Y
-      // and Z curves are sampled.
-      float l = wl * 1e-9f;
-      float lambda5 = (l * l) * (l * l) * l;
-      float Le = (2.0f * h * c * c) / (lambda5 * (std::exp((h * c) / (l * kb  * t)) - 1));
+      float Le = blackbody(T, wl);
 
       xyz[0] += X[i] * Le;
       xyz[1] += Y[i] * Le;
       xyz[2] += Z[i] * Le;
     }
 
-    float scale = blackbody[1] * float(sampledLambdaEnd - sampledLambdaStart) / float(CIE_Y_integral * nSpectralSamples);
+    const float scale = float(sampledLambdaEnd - sampledLambdaStart) / float(CIE_Y_integral * nSpectralSamples);
+    xyz[0] *= scale;
+    xyz[1] *= scale;
+    xyz[2] *= scale;
+  }
+
+  static void normalized_blackbody_to_xyz(float T, float xyz[3])
+  {
+    blackbody_to_xyz(T, xyz);
+
+    // Normalize XYZ values based on maximum blackbody radiance
+    float lambdaMax = 2.8977721e-3f / T * 1e9f;
+    float maxL = blackbody(T, lambdaMax);
+    for (int i = 0; i < 3; ++i)
+        xyz[i] /= maxL;
+  }
+
+  static void blackbody_to_xyz(float T, float scale, float xyz[3])
+  {
+    normalized_blackbody_to_xyz(T, xyz);
     xyz[0] *= scale;
     xyz[1] *= scale;
     xyz[2] *= scale;
   }
 
 
-  static void blackbody_to_rgb(const float blackbody[2], float rgb[3])
+  static void blackbody_to_rgb(float T, float scale, float rgb[3])
   {
     float xyz[3];
-    blackbody_to_xyz(blackbody, xyz);
+    blackbody_to_xyz(T, scale, xyz);
     xyz_to_rgb(xyz, rgb);
+    for (int i = 0; i < 3; ++i)
+        rgb[i] = rgb[i] < 0 ? 0.f : rgb[i];
   }
 
 
@@ -8544,7 +8574,7 @@ namespace minipbrt {
       if (paramDesc->count != 2) {
         return false;
       }
-      blackbody_to_rgb(src, dest);
+      blackbody_to_rgb(src[0], src[1], dest);
       break;
 
     case ParamType::Samples:
