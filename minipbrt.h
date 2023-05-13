@@ -680,6 +680,7 @@ namespace minipbrt {
 
   struct DisneyMaterial : public Material {
     ColorTex color            = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    ColorTex emission         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
     FloatTex anisotropic      = { kInvalidIndex, 0.0f               };
     FloatTex clearcoat        = { kInvalidIndex, 0.0f               };
     FloatTex clearcoatgloss   = { kInvalidIndex, 1.0f               };

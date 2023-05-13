@@ -879,6 +879,7 @@ namespace miniply {
     m_end = m_bufEnd;
 
     if (file_open(&m_f, filename, "rb") != 0) {
+        fprintf(stderr, "PLYReader: Failed to open '%s'", filename);
       m_f = nullptr;
       m_valid = false;
       return;
@@ -2388,7 +2389,7 @@ namespace minipbrt {
   // the parameter names to be sure, because lots of shapes have float
   // parameters of their own.
 
-  static const char* kFloatParams_DisneyMaterial[]       = { "anisotropic", "clearcoat", "clearcoatgloss", "eta", "metallic", "sheen", "roughness", "sheen", "sheentint", "spectrans", "speculartint", nullptr };
+  static const char* kFloatParams_DisneyMaterial[]       = { "anisotropic", "clearcoat", "clearcoatgloss", "eta", "metallic", "roughness", "sheen", "sheentint", "spectrans", "speculartint", nullptr };
   static const char* kFloatParams_FourierMaterial[]      = { nullptr };
   static const char* kFloatParams_GlassMaterial[]        = { "eta", "uroughness", "vroughness", nullptr };
   static const char* kFloatParams_HairMaterial[]         = { "eumelanin", "pheomelanin", "eta", "beta_m", "beta_n", "alpha", nullptr };
@@ -5181,6 +5182,12 @@ namespace minipbrt {
     assert(m_fileData == nullptr);
     assert(m_buf == nullptr);
 
+   // Create the fileData array and the input buffer. This freezes their configuration settings.
+    m_fileData = new FileData[m_maxIncludeDepth + 1];
+    m_fileData[0].filename = filename ? copy_string(filename) : "No filename provided";
+    m_fileData[0].atEOF = false;
+    m_fileData[0].bufOffset = 0;
+
     if (filename == nullptr) {
       set_error("No filename provided");
       return false;
@@ -5192,12 +5199,8 @@ namespace minipbrt {
       return false;
     }
 
-    // Create the fileData array and the input buffer. This freezes their configuration settings.
-    m_fileData = new FileData[m_maxIncludeDepth + 1];
-    m_fileData[0].filename = copy_string(filename);
     m_fileData[0].f = f;
-    m_fileData[0].atEOF = false;
-    m_fileData[0].bufOffset = 0;
+
     m_includeDepth = 0;
 
     m_buf = new char[m_bufCapacity + 1];
@@ -6730,6 +6733,7 @@ namespace minipbrt {
       {
         DisneyMaterial* disney = new DisneyMaterial();
         color_texture_param("color",           &disney->color);
+        color_texture_param("emission",        &disney->emission);
         float_texture_param("anisotropic",     &disney->anisotropic);
         float_texture_param("clearcoat",       &disney->clearcoat);
         float_texture_param("clearcoatgloss",  &disney->clearcoatgloss);
@@ -6949,6 +6953,7 @@ namespace minipbrt {
         const DisneyMaterial* src = dynamic_cast<const DisneyMaterial*>(baseMaterial);
         DisneyMaterial* dst = new DisneyMaterial();
         color_texture_param_with_default("color",           &dst->color,           &src->color);
+        color_texture_param_with_default("emission",        &dst->emission,        &src->emission);
         float_texture_param_with_default("anisotropic",     &dst->anisotropic,     &src->anisotropic);
         float_texture_param_with_default("clearcoat",       &dst->clearcoat,       &src->clearcoat);
         float_texture_param_with_default("clearcoatgloss",  &dst->clearcoatgloss,  &src->clearcoatgloss);
