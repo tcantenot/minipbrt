@@ -3459,6 +3459,7 @@ namespace minipbrt {
 
   static bool double_literal(const char* start, char const** end, double* val)
   {
+      #if K_USE_FAST_FLOAT()
       {
         double tmp = 0.0;
         auto answer = fast_float::from_chars(start, start+30, tmp);
@@ -3471,6 +3472,7 @@ namespace minipbrt {
         }
         return ok;
       }
+      #endif
 
     const char* pos = start;
 
