@@ -130,6 +130,7 @@ namespace minipbrt {
     XYZ,        //!< 3 floats: a CIE XYZ color.
     Blackbody,  //!< 2 floats: temperature (in Kelvin) and scale.
     Samples,    //!< 2n floats: n pairs of (wavelength, value) samples, sorted by wavelength.
+    SPDEnum,    //!< Spectral distribution enum - PBRT v4
     String,     //!< A char* pointer and a length.
     Texture,    //!< A texture reference, stored as a (name, index) pair. The index will be 0xFFFFFFFF if not resolved yet.
   };
@@ -141,9 +142,11 @@ namespace minipbrt {
   };
 
 
+  // TODO: rename SpectrumTex?
   struct ColorTex {
     uint32_t texture;
     float value[3];
+    char* spdEnum; // PBRT v4
   };
 
 
@@ -343,8 +346,11 @@ namespace minipbrt {
   // Film types
   //
 
-  enum class FilmType {
-    Image,
+  enum class FilmType : uint32_t {
+    Image, // PBRT v3
+    RGB,   // PBRT v4
+
+    COUNT
   };
 
 
@@ -386,16 +392,23 @@ namespace minipbrt {
 
 
   struct Filter {
+
+    // PBRT v3
     float xwidth = 2.0f;
     float ywidth = 2.0f;
 
+    // PBRT v4
+    //float xradius = 2.0f;
+    //float yradius = 2.0f;
+
+    Filter(float x = 2.f, float y = 2.f): xwidth(x), ywidth(y) { }
     virtual ~Filter() {}
     virtual FilterType type() const = 0;
   };
 
 
   struct BoxFilter : public Filter {
-    BoxFilter() { xwidth = 0.5f; ywidth = 0.5f; }
+    BoxFilter(): Filter(0.5f, 0.5f) { }
     virtual ~BoxFilter() override {}
     virtual FilterType type() const override { return FilterType::Box; }
   };
@@ -421,7 +434,7 @@ namespace minipbrt {
   struct SincFilter : public Filter {
     float tau = 3.0f;
 
-    SincFilter() { xwidth = 4.0f; ywidth = 4.0f; }
+    SincFilter(): Filter(4.f, 4.f) { }
     virtual ~SincFilter() override {}
     virtual FilterType type() const override { return FilterType::Sinc; }
   };
@@ -666,6 +679,20 @@ namespace minipbrt {
     Subsurface,
     Translucent,
     Uber,
+    CoatedDiffuse,       // PBRT v4
+    CoatedConductor,     // PBRT v4
+    Conductor,           // PBRT v4
+    Dielectric,          // PBRT v4
+    Diffuse,             // PBRT v4
+    DiffuseTransmission, // PBRT v4
+    //Hair,              // PBRT v4
+    Interface,           // PBRT v4
+    Measured,            // PBRT v4
+    //Mix,               // PBRT v4
+    //Subsurface,        // PBRT v4
+    ThinDielectric,      // PBRT v4
+
+    COUNT
   };
 
 
@@ -725,6 +752,7 @@ namespace minipbrt {
   struct HairMaterial : public Material {
     ColorTex sigma_a     = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
     ColorTex color       = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    ColorTex reflectance = { kInvalidIndex, {0.0f, 0.0f, 0.0f} }; // PBRT v4
     FloatTex eumelanin   = { kInvalidIndex, 1.3f               };
     FloatTex pheomelanin = { kInvalidIndex, 0.0f               };
     FloatTex eta         = { kInvalidIndex, 1.55f              };
@@ -733,6 +761,7 @@ namespace minipbrt {
     FloatTex alpha       = { kInvalidIndex, 2.0f               };
     bool has_sigma_a     = false;
     bool has_color       = false;
+    bool has_reflectance = false; // PBRT v4
 
     virtual ~HairMaterial() override {}
     virtual MaterialType type() const override { return MaterialType::Hair; }
@@ -740,14 +769,14 @@ namespace minipbrt {
 
 
   struct KdSubsurfaceMaterial : public Material {
-    ColorTex Kd         = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
-    ColorTex mfp        = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
-    FloatTex eta        = { kInvalidIndex, 1.3f               };
-    ColorTex Kr         = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
-    ColorTex Kt         = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
-    FloatTex uroughness = { kInvalidIndex, 0.0f               };
-    FloatTex vroughness = { kInvalidIndex, 0.0f               };
-    bool remaproughness = true;
+    ColorTex Kd          = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    ColorTex mfp         = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    FloatTex eta         = { kInvalidIndex, 1.3f               };
+    ColorTex Kr          = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
+    ColorTex Kt          = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
+    FloatTex uroughness  = { kInvalidIndex, 0.0f               };
+    FloatTex vroughness  = { kInvalidIndex, 0.0f               };
+    bool remaproughness  = true;
 
     virtual ~KdSubsurfaceMaterial() override {}
     virtual MaterialType type() const override { return MaterialType::KdSubsurface; }
@@ -785,6 +814,7 @@ namespace minipbrt {
 
   struct MixMaterial : public Material {
     ColorTex amount         = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    FloatTex famount        = { kInvalidIndex, 0.5f }; // PBRT v4
     uint32_t namedmaterial1 = kInvalidIndex;
     uint32_t namedmaterial2 = kInvalidIndex;
 
@@ -830,11 +860,15 @@ namespace minipbrt {
     FloatTex eta            = { kInvalidIndex, 1.33f              };
     ColorTex Kr             = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
     ColorTex Kt             = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
+    FloatTex g              = { kInvalidIndex, 0.0f }; // PBRT v4
+    char* name              = nullptr; // PBRT v4
+    ColorTex reflectance    = { kInvalidIndex, {0.0f, 0.0f, 0.0f} }; // PBRT v4
+    ColorTex sigma_s        = { kInvalidIndex, {2.55f, 3.12f, 3.77f} }; // PBRT v4
     FloatTex uroughness     = { kInvalidIndex, 0.0f               };
     FloatTex vroughness     = { kInvalidIndex, 0.0f               };
     bool remaproughness     = true;
 
-    virtual ~SubsurfaceMaterial() override { delete[] coefficients; }
+    virtual ~SubsurfaceMaterial() override { delete[] coefficients; delete[] name; }
     virtual MaterialType type() const override { return MaterialType::Subsurface; }
   };
 
@@ -867,6 +901,98 @@ namespace minipbrt {
     virtual MaterialType type() const override { return MaterialType::Uber; }
   };
 
+  struct CoatedDiffuseMaterial : public Material { // PBRT v4
+    ColorTex albedo      = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex g           = { kInvalidIndex, 0.0f };
+    int maxdepth         = 10;
+    int nsamples         = 1;
+    float thickness      = 0.01f;
+    ColorTex reflectance = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    FloatTex uroughness  = { kInvalidIndex, 0.0f };
+    FloatTex vroughness  = { kInvalidIndex, 0.0f };
+    bool remaproughness  = true;
+
+    virtual ~CoatedDiffuseMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::CoatedDiffuse; }
+  };
+
+  struct CoatedConductorMaterial : public Material { // PBRT v4
+    ColorTex albedo      = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex g           = { kInvalidIndex, 0.0f };
+    int maxdepth         = 10;
+    int nsamples         = 1;
+    float thickness      = 0.01f;
+    ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f}/*TODO: compute sRGB value*/, "metal-Cu-eta" };
+    ColorTex k           = { kInvalidIndex, {0.0f, 0.0f, 0.0f}/*TODO: compute sRGB value*/, "metal-Cu-k"   };
+    ColorTex reflectance = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    FloatTex uroughness  = { kInvalidIndex, 0.0f };
+    FloatTex vroughness  = { kInvalidIndex, 0.0f };
+    bool remaproughness  = true;
+
+    virtual ~CoatedConductorMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::CoatedConductor; }
+  };
+
+   struct ConductorMaterial : public Material { // PBRT v4
+    ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} /*TODO: compute sRGB value*/, "metal-Cu-eta"  };
+    ColorTex k           = { kInvalidIndex, {0.0f, 0.0f, 0.0f} /*TODO: compute sRGB value*/, "metal-Cu-k"    };
+    ColorTex reflectance = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex uroughness  = { kInvalidIndex, 0.0f };
+    FloatTex vroughness  = { kInvalidIndex, 0.0f };
+    bool remaproughness  = true;
+
+    virtual ~ConductorMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::Conductor; }
+  };
+
+  struct DielectricMaterial : public Material { // PBRT v4
+    // "eta" could be either "float" or "spectrum" texture according to https://pbrt.org/fileformat-v4
+    // TODO: add FloatOrColorTex?
+    FloatTex eta         = { kInvalidIndex, 1.5f };
+    //ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex uroughness  = { kInvalidIndex, 0.0f };
+    FloatTex vroughness  = { kInvalidIndex, 0.0f };
+    bool remaproughness  = true;
+
+    virtual ~DielectricMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::Dielectric; }
+  };
+
+  struct DiffuseMaterial : public Material { // PBRT v4
+    ColorTex reflectance = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+
+    virtual ~DiffuseMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::Diffuse; }
+  };
+
+  struct DiffuseTransmissionMaterial : public Material { // PBRT v4
+    ColorTex reflectance  = { kInvalidIndex, {0.25f, 0.25f, 0.25f} };
+    ColorTex transmission = { kInvalidIndex, {0.25f, 0.25f, 0.25f} };
+    FloatTex scale        = { kInvalidIndex, 1.0f };
+
+    virtual ~DiffuseTransmissionMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::DiffuseTransmission; }
+  };
+
+  struct MeasuredMaterial : public Material { // PBRT v4
+    char* filename = nullptr;
+
+    virtual ~MeasuredMaterial() override { delete[] filename; }
+    virtual MaterialType type() const override { return MaterialType::Measured; }
+  };
+
+  struct ThinDielectricMaterial : public Material { // PBRT v4
+    // "eta" could be either "float" or "spectrum" texture according to https://pbrt.org/fileformat-v4
+    // TODO: add FloatOrColorTex?
+    FloatTex eta         = { kInvalidIndex, 1.5f };
+    //ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex uroughness  = { kInvalidIndex, 0.0f };
+    FloatTex vroughness  = { kInvalidIndex, 0.0f };
+    bool remaproughness  = true;
+
+    virtual ~ThinDielectricMaterial() override {}
+    virtual MaterialType type() const override { return MaterialType::ThinDielectric; }
+  };
 
   //
   // Medium types

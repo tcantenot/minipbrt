@@ -43,6 +43,16 @@ SOFTWARE.
 #include <errno.h>
 #endif
 
+// https://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c
+#ifdef WIN32
+#include <io.h>
+#define F_OK 0
+#define access _access
+#else
+#include <unistd.h>
+#endif
+
+
 #define MINIPBRT_STATIC_ARRAY_LENGTH(arr)  static_cast<uint32_t>(sizeof(arr) / sizeof((arr)[0]))
 
 #ifndef PI
@@ -2283,13 +2293,17 @@ namespace minipbrt {
   static const char* kShapeTypes[] = { "cone", "curve", "cylinder", "disk", "hyperboloid", "paraboloid", "sphere", "trianglemesh", "heightfield", "loopsubdiv", "nurbs", "plymesh", nullptr };
   static const char* kAreaLightTypes[] = { "diffuse", nullptr };
   static const char* kLightTypes[] = { "distant", "goniometric", "infinite", "point", "projection", "spot", nullptr };
-  static const char* kMaterialTypes[] = { "disney", "fourier", "glass", "hair", "kdsubsurface", "matte", "metal", "mirror", "mix", "none", "plastic", "substrate", "subsurface", "translucent", "uber", "", nullptr };
+  static const char* kMaterialTypes[] = {
+      "disney", "fourier", "glass", "hair", "kdsubsurface", "matte", "metal", "mirror", "mix", "none", "plastic", "substrate", "subsurface", "translucent", "uber",
+      "coateddiffuse", "coatedconductor", "conductor", "dielectric", "diffuse", "diffusetransmission", /*"hair",*/ "interface", "measured", /*"mix",*/ /*"subsurface",*/ "thindielectric", // PBRT v4
+      nullptr
+  };
   static const char* kTextureDataTypes[] = { "float", "spectrum", "color", nullptr };
   // Note that checkerboard appears twice below, because there are 2D and 3D versions of it.
   static const char* kTextureTypes[] = { "bilerp", "checkerboard", "checkerboard", "constant", "dots", "fbm", "imagemap", "marble", "mix", "scale", "uv", "windy", "wrinkled", "ptex", nullptr };
   static const char* kAccelTypes[] = { "bvh", "kdtree", nullptr };
   static const char* kCameraTypes[] = { "perspective", "orthographic", "environment", "realistic", nullptr };
-  static const char* kFilmTypes[] = { "image", nullptr };
+  static const char* kFilmTypes[] = { "image" /*PBRT v3*/, "rgb" /*PBRT v4*/, nullptr };
   static const char* kIntegratorTypes[] = { "bdpt", "directlighting", "mlt", "path", "sppm", "whitted", "volpath", "ambientocclusion", nullptr };
   static const char* kPixelFilterTypes[] = { "box", "gaussian", "mitchell", "sinc", "triangle", nullptr };
   static const char* kSamplerTypes[] = { "02sequence", "lowdiscrepancy", "halton", "maxmindist", "random", "sobol", "stratified", nullptr };
@@ -2372,7 +2386,8 @@ namespace minipbrt {
     { ParamType::RGB,       "rgb",       3, sizeof(float), "color"  },
     { ParamType::XYZ,       "xyz",       3, sizeof(float), nullptr  },
     { ParamType::Blackbody, "blackbody", 2, sizeof(float), nullptr  },
-    { ParamType::Samples,   "spectrum",  2, sizeof(float), nullptr  },
+    { ParamType::Samples,   "spectrum",  2, sizeof(float), nullptr  }, // PBRTv3
+    //{ ParamType::SPDEnum,   "spectrum",  2, sizeof(float), nullptr  }, // PBRTv4 -> detect if an enum is used when parsing "spectrum" (as ParamType::Samples) and change param type to SPDEnum
     { ParamType::String,    "string",    1, sizeof(char),  nullptr  },
     { ParamType::Texture,   "texture",   1, sizeof(char),  nullptr  },
   };
@@ -2389,21 +2404,30 @@ namespace minipbrt {
   // the parameter names to be sure, because lots of shapes have float
   // parameters of their own.
 
-  static const char* kFloatParams_DisneyMaterial[]       = { "anisotropic", "clearcoat", "clearcoatgloss", "eta", "metallic", "roughness", "sheen", "sheentint", "spectrans", "speculartint", nullptr };
-  static const char* kFloatParams_FourierMaterial[]      = { nullptr };
-  static const char* kFloatParams_GlassMaterial[]        = { "eta", "uroughness", "vroughness", nullptr };
-  static const char* kFloatParams_HairMaterial[]         = { "eumelanin", "pheomelanin", "eta", "beta_m", "beta_n", "alpha", nullptr };
-  static const char* kFloatParams_KdSubsurfaceMaterial[] = { "eta", "uroughness", "vroughness", nullptr };
-  static const char* kFloatParams_MatteMaterial[]        = { "sigma", nullptr };
-  static const char* kFloatParams_MetalMaterial[]        = { "uroughness", "vroughness", nullptr };
-  static const char* kFloatParams_MirrorMaterial[]       = { nullptr };
-  static const char* kFloatParams_MixMaterial[]          = { nullptr };
-  static const char* kFloatParams_NoneMaterial[]         = { nullptr };
-  static const char* kFloatParams_PlasticMaterial[]      = { "roughness", nullptr };
-  static const char* kFloatParams_SubstrateMaterial[]    = { "uroughness", "vroughness", nullptr };
-  static const char* kFloatParams_SubsurfaceMaterial[]   = { "scale", "eta", "uroughness", "vroughness", nullptr };
-  static const char* kFloatParams_TranslucentMaterial[]  = { "roughness", nullptr };
-  static const char* kFloatParams_UberMaterial[]         = { "eta", "uroughness", "vroughness", nullptr };
+  static const char* kFloatParams_DisneyMaterial[]              = { "anisotropic", "clearcoat", "clearcoatgloss", "eta", "metallic", "roughness", "sheen", "sheentint", "spectrans", "speculartint", nullptr };
+  static const char* kFloatParams_FourierMaterial[]             = { nullptr };
+  static const char* kFloatParams_GlassMaterial[]               = { "eta", "uroughness", "vroughness", nullptr };
+  static const char* kFloatParams_HairMaterial[]                = { "eumelanin", "pheomelanin", "eta", "beta_m", "beta_n", "alpha", nullptr };
+  static const char* kFloatParams_KdSubsurfaceMaterial[]        = { "eta", "uroughness", "vroughness", nullptr };
+  static const char* kFloatParams_MatteMaterial[]               = { "sigma", nullptr };
+  static const char* kFloatParams_MetalMaterial[]               = { "uroughness", "vroughness", nullptr };
+  static const char* kFloatParams_MirrorMaterial[]              = { nullptr };
+  static const char* kFloatParams_MixMaterial[]                 = { /*"amount" PBRT v4*/ nullptr };
+  static const char* kFloatParams_NoneMaterial[]                = { nullptr };
+  static const char* kFloatParams_PlasticMaterial[]             = { "roughness", nullptr };
+  static const char* kFloatParams_SubstrateMaterial[]           = { "uroughness", "vroughness", nullptr };
+  static const char* kFloatParams_SubsurfaceMaterial[]          = { "scale", "eta", "uroughness", "vroughness", "g" /*PBRT v4*/, nullptr };
+  static const char* kFloatParams_TranslucentMaterial[]         = { "roughness", nullptr };
+  static const char* kFloatParams_UberMaterial[]                = { "eta", "uroughness", "vroughness", nullptr };
+  static const char* kFloatParams_CoatedDiffuseMaterial[]       = { "g", /*int "maxdepth",*/ /*int "nsamples",*/ "thickness", "uroughness", "vroughness", nullptr }; // PBRT v4
+  static const char* kFloatParams_CoatedConductorMaterial[]     = { "g", /*int "maxdepth",*/ /*int "nsamples",*/ "thickness", "uroughness", "vroughness", nullptr }; // PBRT v4
+  static const char* kFloatParams_ConductorMaterial[]           = { "uroughness", "vroughness", nullptr }; // PBRT v4
+  static const char* kFloatParams_DielectricMaterial[]          = { "eta", "uroughness", "vroughness", nullptr }; // PBRT v4
+  static const char* kFloatParams_DiffuseMaterial[]             = { nullptr }; // PBRT v4
+  static const char* kFloatParams_DiffuseTransmissionMaterial[] = { "scale", nullptr }; // PBRT v4
+  static const char* kFloatParams_InterfaceMaterial[]           = { nullptr }; // PBRT v4
+  static const char* kFloatParams_MeasuredMaterial[]            = { nullptr }; // PBRT v4
+  static const char* kFloatParams_ThinDielectricMaterial[]      = { "eta", "uroughness", "vroughness", nullptr }; // PBRT v4
 
   static const char** kFloatParamsByMaterial[] = {
     kFloatParams_DisneyMaterial,
@@ -2421,8 +2445,18 @@ namespace minipbrt {
     kFloatParams_SubsurfaceMaterial,
     kFloatParams_TranslucentMaterial,
     kFloatParams_UberMaterial,
+    kFloatParams_CoatedDiffuseMaterial, // PBRT v4
+    kFloatParams_CoatedConductorMaterial, // PBRT v4
+    kFloatParams_ConductorMaterial, // PBRT v4
+    kFloatParams_DielectricMaterial, // PBRT v4
+    kFloatParams_DiffuseMaterial, // PBRT v4
+    kFloatParams_DiffuseTransmissionMaterial, // PBRT v4
+    kFloatParams_InterfaceMaterial, // PBRT v4
+    kFloatParams_MeasuredMaterial, // PBRT v4
+    kFloatParams_ThinDielectricMaterial // PBRT v4
   };
 
+  static_assert(sizeof(kFloatParamsByMaterial)/sizeof(kFloatParamsByMaterial[0]) == (size_t)MaterialType::COUNT, "Missing material in kFloatParamsByMaterial array");
 
   //
   // Constants
@@ -3095,7 +3129,7 @@ namespace minipbrt {
   //
 
   typedef Bits<ParamType> ParamTypeSet;
-  static const ParamTypeSet kSpectrumTypes = ParamType::RGB | ParamType::XYZ | ParamType::Blackbody | ParamType::Samples;
+  static const ParamTypeSet kSpectrumTypes = ParamType::RGB | ParamType::XYZ | ParamType::Blackbody | ParamType::Samples | ParamType::SPDEnum;
   static const ParamTypeSet kColorTextureTypes = kSpectrumTypes | ParamType::Texture;
   static const ParamTypeSet kFloatTextureTypes = ParamType::Float | ParamType::Texture;
 
@@ -3177,7 +3211,7 @@ namespace minipbrt {
 
     bool parse_ints(uint32_t* count);
     bool parse_floats(uint32_t* count);
-    bool parse_spectrum(uint32_t* count);
+    bool parse_spectrum(ParamInfo& param);
     bool parse_strings(uint32_t* count);
     bool parse_bools(uint32_t* count);
 
@@ -3211,6 +3245,8 @@ namespace minipbrt {
     bool float_texture_param_with_default(const char* name, FloatTex* dest, const FloatTex* defaultVal);
     bool color_texture_param_with_default(const char *name, ColorTex *dest, const ColorTex* defaultVal);
     bool enum_param(const char* name, const char* values[], int* dest);
+    bool spd_enum_string_param(const char* name, char** dest, bool copy=false);
+    bool spd_enum_string_param_with_default(const char* name, char** dest, const char* defaultVal, bool copy=false);
 
     template <class T>
     bool typed_enum_param(const char* name, const char* values[], T* dest) {
@@ -6683,7 +6719,7 @@ namespace minipbrt {
   {
     MaterialType materialType;
     int materialTypeIndex = enum_arg(0);
-    if (materialTypeIndex == int(MaterialType::Uber) + 1) {
+    if (materialTypeIndex == int(MaterialType::COUNT)) {
       materialType = MaterialType::None;
     }
     else {
@@ -6709,7 +6745,8 @@ namespace minipbrt {
       m_tokenizer.set_error("Unknown or invalid material type");
       return false;
     }
-    if (materialTypeIndex == int(MaterialType::Uber) + 1) {
+    if (materialTypeIndex == int(MaterialType::COUNT))
+    {
       materialType = MaterialType::None;
     }
     else {
@@ -6781,8 +6818,9 @@ namespace minipbrt {
     case MaterialType::Hair:
       {
         HairMaterial* hair = new HairMaterial();
-        hair->has_sigma_a = color_texture_param("sigma_a", &hair->sigma_a);
-        hair->has_color   = color_texture_param("color",   &hair->color);
+        hair->has_sigma_a     = color_texture_param("sigma_a",     &hair->sigma_a);
+        hair->has_color       = color_texture_param("color",       &hair->color);
+        hair->has_reflectance = color_texture_param("reflectance", &hair->reflectance);
         float_texture_param("eumelanin",   &hair->eumelanin);
         float_texture_param("pheomelanin", &hair->pheomelanin);
         float_texture_param("eta",         &hair->eta);
@@ -6842,6 +6880,7 @@ namespace minipbrt {
         char* tmp = nullptr;
         MixMaterial* mix = new MixMaterial();
         color_texture_param("amount", &mix->amount);
+        float_texture_param("amount", &mix->famount); // PBRT v4
         if (string_param("namedmaterial1", &tmp)) {
           mix->namedmaterial1 = find_material(tmp);
         }
@@ -6889,6 +6928,10 @@ namespace minipbrt {
         float_texture_param("eta",           &subsurface->eta);
         color_texture_param("Kr",            &subsurface->Kr);
         color_texture_param("Kt",            &subsurface->Kt);
+        float_texture_param("g",             &subsurface->g); // PBRT v4
+        string_param("name",                 &subsurface->name, true); // PBRT v4
+        color_texture_param("reflectance",   &subsurface->reflectance); // PBRT v4
+        color_texture_param("sigma_s",       &subsurface->sigma_s); // PBRT v4
         float_texture_param("uroughness",    &subsurface->uroughness);
         float_texture_param("vroughness",    &subsurface->vroughness);
         bool_param("remaproughness",         &subsurface->remaproughness);
@@ -6924,7 +6967,108 @@ namespace minipbrt {
         material = uber;
       }
       break;
+
+     case MaterialType::CoatedDiffuse: // PBRT v4
+      {
+        CoatedDiffuseMaterial* m = new CoatedDiffuseMaterial();
+        color_texture_param("albedo",      &m->albedo);
+        float_texture_param("g",           &m->g);
+        int_param("maxdepth",              &m->maxdepth);
+        int_param("nsamples",              &m->nsamples);
+        float_param("thickness",           &m->thickness);
+        color_texture_param("reflectance", &m->reflectance);
+        float_texture_param("uroughness",  &m->uroughness);
+        float_texture_param("vroughness",  &m->vroughness);
+        bool_param("remaproughness",       &m->remaproughness);
+        material = m;
+      }
+      break;
+
+     case MaterialType::CoatedConductor: // PBRT v4
+      {
+        CoatedConductorMaterial* m = new CoatedConductorMaterial();
+        color_texture_param("albedo",      &m->albedo);
+        float_texture_param("g",           &m->g);
+        int_param("maxdepth",              &m->maxdepth);
+        int_param("nsamples",              &m->nsamples);
+        float_param("thickness",           &m->thickness);
+        color_texture_param("eta",         &m->eta);
+        color_texture_param("k",           &m->k);
+        color_texture_param("reflectance", &m->reflectance);
+        float_texture_param("uroughness",  &m->uroughness);
+        float_texture_param("vroughness",  &m->vroughness);
+        bool_param("remaproughness",       &m->remaproughness);
+        material = m;
+      }
+      break;
+
+     case MaterialType::Dielectric: // PBRT v4
+      {
+        DielectricMaterial* m = new DielectricMaterial();
+        float_texture_param("eta",         &m->eta);
+        //color_texture_param("eta",         &m->eta);
+        float_texture_param("uroughness",  &m->uroughness);
+        float_texture_param("vroughness",  &m->vroughness);
+        bool_param("remaproughness",       &m->remaproughness);
+        material = m;
+      }
+      break;
+
+     case MaterialType::Conductor: // PBRT v4
+      {
+        ConductorMaterial* m = new ConductorMaterial();
+        color_texture_param("eta",         &m->eta);
+        color_texture_param("k",           &m->k);
+        color_texture_param("reflectance", &m->reflectance);
+        float_texture_param("uroughness",  &m->uroughness);
+        float_texture_param("vroughness",  &m->vroughness);
+        bool_param("remaproughness",       &m->remaproughness);
+        material = m;
+      }
+      break;
+
+     case MaterialType::Diffuse: // PBRT v4
+      {
+        DiffuseMaterial* m = new DiffuseMaterial();
+        color_texture_param("reflectance", &m->reflectance);
+        material = m;
+      }
+      break;
+
+     case MaterialType::DiffuseTransmission: // PBRT v4
+      {
+        DiffuseTransmissionMaterial* m = new DiffuseTransmissionMaterial();
+        color_texture_param("reflectance",  &m->reflectance);
+        color_texture_param("transmission", &m->transmission);
+        float_texture_param("scale",        &m->scale);
+        material = m;
+      }
+      break;
+
+      case MaterialType::Measured:
+      {
+        MeasuredMaterial* m = new MeasuredMaterial();
+        if (!string_param("filename", &m->filename, true)) {
+          m_tokenizer.set_error("Required parameter \"filename\" is missing or invalid");
+          return false;
+        }
+        material = m;
+      }
+      break;
+
+      case MaterialType::ThinDielectric: // PBRT v4
+      {
+        ThinDielectricMaterial* m = new ThinDielectricMaterial();
+        float_texture_param("eta",         &m->eta);
+        //color_texture_param("eta",         &m->eta);
+        float_texture_param("uroughness",  &m->uroughness);
+        float_texture_param("vroughness",  &m->vroughness);
+        bool_param("remaproughness",       &m->remaproughness);
+        material = m;
+      }
+      break;
     }
+
 
     if (material == nullptr) {
       m_tokenizer.set_error("Failed to create material");
@@ -7167,6 +7311,111 @@ namespace minipbrt {
         float_texture_param_with_default("uroughness", &dst->uroughness,     &src->uroughness);
         float_texture_param_with_default("vroughness", &dst->vroughness,     &src->vroughness);
         bool_param_with_default("remaproughness",      &dst->remaproughness, src->remaproughness);
+        material = dst;
+      }
+      break;
+
+    case MaterialType::CoatedDiffuse: // PBRT v4
+      {
+        const CoatedDiffuseMaterial* src = dynamic_cast<const CoatedDiffuseMaterial*>(baseMaterial);
+        CoatedDiffuseMaterial* dst = new CoatedDiffuseMaterial();
+        color_texture_param_with_default("albedo",      &dst->albedo,         &src->albedo);
+        float_texture_param_with_default("g",           &dst->g,              &src->g);
+        //int_param_with_default("maxdepth",              &dst->maxdepth,       &src->maxdepth);
+        //int_param_with_default("nsamples",              &dst->nsamples,       &src->nsamples);
+        float_param_with_default("thickness",           &dst->thickness,      src->thickness);
+        color_texture_param_with_default("reflectance", &dst->reflectance,    &src->reflectance);
+        float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
+        float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
+        bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
+        material = dst;
+      }
+      break;
+
+    case MaterialType::CoatedConductor: // PBRT v4
+      {
+        const CoatedConductorMaterial* src = dynamic_cast<const CoatedConductorMaterial*>(baseMaterial);
+        CoatedConductorMaterial* dst = new CoatedConductorMaterial();
+        color_texture_param_with_default("albedo",      &dst->albedo,         &src->albedo);
+        float_texture_param_with_default("g",           &dst->g,              &src->g);
+        //int_param_with_default("maxdepth",              &dst->maxdepth,       &src->maxdepth);
+        //int_param_with_default("nsamples",              &dst->nsamples,       &src->nsamples);
+        float_param_with_default("thickness",           &dst->thickness,      src->thickness);
+        color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        color_texture_param_with_default("k",           &dst->k,              &src->k);
+        color_texture_param_with_default("reflectance", &dst->reflectance,    &src->reflectance);
+        float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
+        float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
+        bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
+        material = dst;
+      }
+      break;
+
+    case MaterialType::Dielectric: // PBRT v4
+      {
+        const DielectricMaterial* src = dynamic_cast<const DielectricMaterial*>(baseMaterial);
+        DielectricMaterial* dst = new DielectricMaterial();
+        float_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        //color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
+        float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
+        bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
+        material = dst;
+      }
+      break;
+
+    case MaterialType::Conductor: // PBRT v4
+      {
+        const ConductorMaterial* src = dynamic_cast<const ConductorMaterial*>(baseMaterial);
+        ConductorMaterial* dst = new ConductorMaterial();
+        color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        color_texture_param_with_default("k",           &dst->k,              &src->k);
+        color_texture_param_with_default("reflectance", &dst->reflectance,    &src->reflectance);
+        float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
+        float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
+        bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
+        material = dst;
+      }
+      break;
+
+    case MaterialType::Diffuse: // PBRT v4
+      {
+        const DiffuseMaterial* src = dynamic_cast<const DiffuseMaterial*>(baseMaterial);
+        DiffuseMaterial* dst = new DiffuseMaterial();
+        color_texture_param_with_default("reflectance", &dst->reflectance, &src->reflectance);
+        material = dst;
+      }
+      break;
+
+    case MaterialType::DiffuseTransmission: // PBRT v4
+      {
+        const DiffuseTransmissionMaterial* src = dynamic_cast<const DiffuseTransmissionMaterial*>(baseMaterial);
+        DiffuseTransmissionMaterial* dst = new DiffuseTransmissionMaterial();
+        color_texture_param_with_default("reflectance",  &dst->reflectance,  &src->reflectance);
+        color_texture_param_with_default("transmission", &dst->transmission, &src->transmission);
+        float_texture_param_with_default("scale",        &dst->scale,        &src->scale);
+        material = dst;
+      }
+      break;
+
+      case MaterialType::Measured: // PBRT v4
+      {
+        const MeasuredMaterial* src = dynamic_cast<const MeasuredMaterial*>(baseMaterial);
+        MeasuredMaterial* dst = new MeasuredMaterial();
+        string_param_with_default("filename", &dst->filename, src->filename, true);
+        material = dst;
+      }
+      break;
+
+      case MaterialType::ThinDielectric: // PBRT v4
+      {
+        const ThinDielectricMaterial* src = dynamic_cast<const ThinDielectricMaterial*>(baseMaterial);
+        ThinDielectricMaterial* dst = new ThinDielectricMaterial();
+        float_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        //color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
+        float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
+        bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
         material = dst;
       }
       break;
@@ -7680,9 +7929,16 @@ namespace minipbrt {
   bool Parser::parse_Film()
   {
     FilmType filmType = typed_enum_arg<FilmType>(0);
+
+    if(static_cast<uint32_t>(filmType) >= static_cast<uint32_t>(FilmType::COUNT)) {
+      m_tokenizer.set_error("Failed to create film: unknown type: %u", filmType);
+      return false;
+    }
+
     Film* film = nullptr;
 
-    if (filmType == FilmType::Image) { // image
+    if (filmType == FilmType::Image /*PBRT v3*/ || filmType == FilmType::RGB /*PBRT v4*/)
+    {
       ImageFilm* img = new ImageFilm();
       int_param("xresolution", &img->xresolution);
       int_param("yresolution", &img->yresolution);
@@ -7859,8 +8115,16 @@ namespace minipbrt {
       return false;
     }
 
-    float_param("xwidth", &filter->xwidth);
-    float_param("ywidth", &filter->ywidth);
+    // PBRT v3
+    {
+        float_param("xwidth", &filter->xwidth);
+        float_param("ywidth", &filter->ywidth);
+    }
+    // PBRT v4
+    {
+        float_param("xradius", &filter->xwidth);
+        float_param("yradius", &filter->ywidth);
+    }
 
     if (m_scene->filter != nullptr) {
       delete m_scene->filter; // Should we warn about multiple pixel filter definitions?
@@ -8069,7 +8333,7 @@ namespace minipbrt {
       ok = parse_floats(&param.count);
       break;
     case ParamType::Samples:
-      ok = parse_spectrum(&param.count);
+      ok = parse_spectrum(param);
       break;
     case ParamType::String:
     case ParamType::Texture:
@@ -8080,7 +8344,7 @@ namespace minipbrt {
       break;
     }
 
-    if (ok && paramTypeDecl.numComponents > 1 && (param.count % paramTypeDecl.numComponents) != 0) {
+    if (ok && param.type != ParamType::SPDEnum && paramTypeDecl.numComponents > 1 && (param.count % paramTypeDecl.numComponents) != 0) {
       m_tokenizer.set_error("Wrong number of values for %s with type %s, expected a multiple of %u",
                             paramNameBuf, paramTypeDecl.name, paramTypeDecl.numComponents);
       return false;
@@ -8162,9 +8426,10 @@ namespace minipbrt {
   }
 
 
-  bool Parser::parse_spectrum(uint32_t* count)
+  //bool Parser::parse_spectrum(uint32_t* count)
+  bool Parser::parse_spectrum(ParamInfo& param)
   {
-    *count = 0;
+    param.count = 0;
 
     bool bracketed = false;
     if (m_tokenizer.match_symbol("[")) {
@@ -8185,28 +8450,47 @@ namespace minipbrt {
       m_tokenizer.advance();
 
       filename = copy_string(filename);
-      ok = m_tokenizer.push_file(filename, true);
-      delete[] filename;
 
-      if (!ok) {
-        m_tokenizer.set_error("Failed to open SPD file %s", filename);
-        return false;
+      // PBRT v3 can reference a SPD file containing spectral distribution
+      // In PBRT v4, the SPD is referenced with a enum value that is resolved in the PBRT renderer
+      char* resolvedFilename = m_tokenizer.temp_buffer();
+      resolve_file(filename, m_tokenizer.get_original_filename(), resolvedFilename, kTempBufferCapacity);
+      const bool bSPDFileExists = (access(filename, F_OK) == 0);
+      if(bSPDFileExists) // PBRT v3
+      {
+        // FIXME: not optimal: resolve_file is called twice (once above, and once in push_file)
+          ok = m_tokenizer.push_file(filename, true);
+          delete[] filename;
+
+          if (!ok) {
+            m_tokenizer.set_error("Failed to open SPD file %s", filename);
+            return false;
+          }
+
+          while (m_tokenizer.advance()) {
+            float pair[2];
+            ok = m_tokenizer.float_literal(pair) &&
+                 m_tokenizer.advance() &&
+                 m_tokenizer.float_literal(pair + 1);
+            if (!ok) {
+              m_tokenizer.set_error("Failed to parse sampled spectrum data");
+              return false;
+            }
+            push_bytes(pair, sizeof(pair));
+            param.count += 2;
+          }
+
+          m_tokenizer.pop_file();
+      }
+      else // PBRT v4
+      {
+          param.type = ParamType::SPDEnum;
+          param.count = 1;
+          push_string(filename, strlen(filename));
+          delete[] filename;
       }
 
-      while (m_tokenizer.advance()) {
-        float pair[2];
-        ok = m_tokenizer.float_literal(pair) &&
-             m_tokenizer.advance() &&
-             m_tokenizer.float_literal(pair + 1);
-        if (!ok) {
-          m_tokenizer.set_error("Failed to parse sampled spectrum data");
-          return false;
-        }
-        push_bytes(pair, sizeof(pair));
-        (*count) += 2;
-      }
 
-      m_tokenizer.pop_file();
       return true;
     }
 
@@ -8231,7 +8515,7 @@ namespace minipbrt {
         return false;
       }
       push_bytes(pair, sizeof(pair));
-      (*count) += 2;
+      param.count += 2;
     }
     return true;
   }
@@ -8272,25 +8556,44 @@ namespace minipbrt {
   }
 
 
-  static const char* boolValues[] = { "false", "true", nullptr };
-
   bool Parser::parse_bools(uint32_t* count)
   {
     *count = 0;
 
+    const auto parse_bool = [this](bool & oVal)
+    {
+        if (m_tokenizer.match_symbol("\"false\"")) { // PBRT v3
+          oVal = false;
+        }
+        else if (m_tokenizer.match_symbol("false")) { // PBRT v4
+          oVal = false;
+        }
+        else if (m_tokenizer.match_symbol("\"true\"")) { // PBRT v3
+          oVal = true;
+        }
+        else if (m_tokenizer.match_symbol("true")) { // PBRT v4
+          oVal = true;
+        }
+        else {
+          m_tokenizer.set_error("Invalid value for boolean parameter");
+          return false;
+        }
+
+        return true;
+    };
+
     bool ok;
-    int boolIndex = -1;
     if (m_tokenizer.match_symbol("[")) {
       while (m_tokenizer.advance()) {
         if (m_tokenizer.match_symbol("]")) {
           return true;
         }
-        ok = m_tokenizer.which_string_literal(boolValues, &boolIndex);
+        bool val = false;
+        ok = parse_bool(val);
         if (!ok) {
           m_tokenizer.set_error("Invalid value for boolean parameter");
           return false;
         }
-        bool val = static_cast<bool>(boolIndex);
         push_bytes(&val, sizeof(val));
         (*count)++;
       }
@@ -8299,12 +8602,12 @@ namespace minipbrt {
       return false;
     }
     else {
-      ok = m_tokenizer.which_string_literal(boolValues, &boolIndex);
+      bool val = false;
+      ok = parse_bool(val);
       if (!ok) {
         m_tokenizer.set_error("Invalid value for boolean parameter");
         return false;
       }
-      bool val = static_cast<bool>(boolIndex);
       push_bytes(&val, sizeof(val));
       (*count)++;
       return true;
@@ -8591,6 +8894,13 @@ namespace minipbrt {
       spectrum_to_rgb(src, paramDesc->count / 2, dest);
       break;
 
+    case ParamType::SPDEnum:
+      if (paramDesc->count != 1) {
+        return false;
+      }
+      return false; // TODO: adds the RGB version -> need to embed the SPD defined in PBRT v4
+      break;
+
     default:
       break;
     }
@@ -8645,7 +8955,8 @@ namespace minipbrt {
   {
     bool hasTex = texture_param(name, TextureData::Spectrum, &dest->texture);
     bool hasValue = spectrum_param(name, dest->value);
-    return hasTex | hasValue;
+    bool hasSPDEnum = spd_enum_string_param(name, &dest->spdEnum, true);
+    return hasTex | hasValue | hasSPDEnum;
   }
 
 
@@ -8695,6 +9006,36 @@ namespace minipbrt {
     return true;
   }
 
+  bool Parser::spd_enum_string_param(const char* name, char** dest, bool copy)
+  {
+    assert(name != nullptr);
+    assert(dest != nullptr);
+
+    const ParamInfo* paramDesc = find_param(name, ParamType::SPDEnum);
+    if (paramDesc == nullptr || paramDesc->count != 1) {
+      return false;
+    }
+
+    char* src = reinterpret_cast<char*>(m_temp.data() + paramDesc->offset);
+    //if (copy && *dest != nullptr) {
+    //  delete[] *dest;
+    //}
+    *dest = copy ? copy_string(src) : src;
+    return true;
+  }
+
+
+  bool Parser::spd_enum_string_param_with_default(const char* name, char** dest, const char* defaultVal, bool copy)
+  {
+    if (spd_enum_string_param(name, dest, copy)) {
+      return true;
+    }
+    //if (copy && *dest != nullptr) {
+    //  delete[] *dest;
+    //}
+    *dest = copy ? copy_string(defaultVal) : const_cast<char*>(defaultVal);
+    return true;
+  }
 
   void Parser::save_current_transform_matrices(Transform* dest) const
   {
