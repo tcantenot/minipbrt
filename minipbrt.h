@@ -30,11 +30,12 @@ SOFTWARE.
 #include <vector>
 
 
-/// minipbrt - A simple and fast parser for PBRT v3 files
+/// minipbrt - A simple and fast parser for PBRT v3/v4 files
 /// =====================================================
 ///
 /// For info about the PBRT file format, see:
 /// https://www.pbrt.org/fileformat-v3.html
+/// https://www.pbrt.org/fileformat-v4.html
 ///
 /// Getting started
 /// ---------------
@@ -347,8 +348,10 @@ namespace minipbrt {
   //
 
   enum class FilmType : uint32_t {
-    Image, // PBRT v3
-    RGB,   // PBRT v4
+    Image,    // PBRT v3
+    RGB,      // PBRT v4
+    GBuffer,  // PBRT v4
+    Spectral, // PBRT v4
 
     COUNT
   };
@@ -360,7 +363,6 @@ namespace minipbrt {
     virtual float get_aspect_ratio() const = 0;
     virtual void get_resolution(int& w, int& h) const = 0;
   };
-
 
   struct ImageFilm : public Film {
     int xresolution           = 640;
@@ -376,7 +378,44 @@ namespace minipbrt {
     virtual float get_aspect_ratio() const override { return float(xresolution) / float(yresolution); }
     virtual void get_resolution(int& w, int& h) const override { w = xresolution; h = yresolution; }
   };
+  
+  struct PBRTv4Film : public Film { // PBRT v4
+    int xresolution           = 640;
+    int yresolution           = 480;
+    float cropwwindow[4]      = { 0.0f, 1.0f, 0.0f, 1.0f };
+    int pixelbounds[4]        = { 0, 640, 0, 480 };
+    float diagonal            = 35.0f; // in millimetres
+    char* filename            = nullptr; // name of the output image.
+    bool savefp16             = true;
+    float iso                = 100.f;
+    float whitebalance       = 0.f;
+    char* sensor             = nullptr;
+    float maxcomponentvalue  = std::numeric_limits<float>::infinity();
 
+    virtual float get_aspect_ratio() const override { return float(xresolution) / float(yresolution); }
+    virtual void get_resolution(int& w, int& h) const override { w = xresolution; h = yresolution; }
+  };
+
+  struct RGBFilm : public PBRTv4Film { // PBRT v4
+    virtual ~RGBFilm() override {}
+    virtual FilmType type() const override { return FilmType::RGB; }
+  };
+  
+  struct GBufferFilm : public PBRTv4Film { // PBRT v4
+    char* coordinatesystem    = nullptr;
+
+    virtual ~GBufferFilm() override {}
+    virtual FilmType type() const override { return FilmType::GBuffer; }
+  };
+
+  struct SpectralFilm : public PBRTv4Film { // PBRT v4
+    int numbuckets = 16;
+    float lambdamin = 360;
+    float lambdamax = 830;
+
+    virtual ~SpectralFilm() override {}
+    virtual FilmType type() const override { return FilmType::Spectral; }
+  };
 
   //
   // Filter types
@@ -1343,16 +1382,17 @@ namespace minipbrt {
     Checkerboard2D,
     Checkerboard3D,
     Constant,
+    DirectionMix, // PBRTv4
     Dots,
     FBM,
     ImageMap,
     Marble,
     Mix,
+    PTex,
     Scale,
     UV,
     Windy,
-    Wrinkled,
-    PTex,
+    Wrinkled
   };
 
 
@@ -1456,6 +1496,16 @@ namespace minipbrt {
   };
   
 
+  struct DirectionMixTexture : public TextureAnyD { // PBRT v4
+    ColorTex tex1 = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
+    ColorTex tex2 = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    float dir[3]  = { 0.0f, 1.0f, 0.0f };
+
+    virtual ~DirectionMixTexture() override {}
+    virtual TextureType type() const override { return TextureType::DirectionMix; }
+  };
+ 
+
   struct DotsTexture : public Texture2D {
     ColorTex inside  = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
     ColorTex outside = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
@@ -1508,6 +1558,15 @@ namespace minipbrt {
   };
   
 
+   struct PTexTexture : public Texture2D {
+    char* filename = nullptr;
+    float gamma    = 2.2f;
+
+    virtual ~PTexTexture() override { delete[] filename; }
+    virtual TextureType type() const override { return TextureType::PTex; }
+  };
+
+
   struct ScaleTexture : public TextureAnyD {
     ColorTex tex1 = { kInvalidIndex, {1.0f, 1.0f, 1.0f} };
     ColorTex tex2 = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
@@ -1539,15 +1598,6 @@ namespace minipbrt {
 
     virtual ~WrinkledTexture() override {}
     virtual TextureType type() const override { return TextureType::Wrinkled; }
-  };
-
-
-  struct PTexTexture : public Texture2D {
-    char* filename = nullptr;
-    float gamma    = 2.2f;
-
-    virtual ~PTexTexture() override { delete[] filename; }
-    virtual TextureType type() const override { return TextureType::PTex; }
   };
   
 

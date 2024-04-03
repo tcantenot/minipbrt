@@ -446,7 +446,7 @@ namespace miniply {
 
   static inline bool is_keyword_part(char ch)
   {
-    return is_alnum(ch) || ch == '_';
+    return is_alnum(ch) || ch == '_' || ch == '.';
   }
 
 
@@ -2300,10 +2300,10 @@ namespace minipbrt {
   };
   static const char* kTextureDataTypes[] = { "float", "spectrum", "color", nullptr };
   // Note that checkerboard appears twice below, because there are 2D and 3D versions of it.
-  static const char* kTextureTypes[] = { "bilerp", "checkerboard", "checkerboard", "constant", "dots", "fbm", "imagemap", "marble", "mix", "scale", "uv", "windy", "wrinkled", "ptex", nullptr };
+  static const char* kTextureTypes[] = { "bilerp", "checkerboard", "checkerboard", "constant", "directionmix", "dots", "fbm", "imagemap", "marble", "mix", "ptex", "scale", "uv", "windy", "wrinkled", nullptr };
   static const char* kAccelTypes[] = { "bvh", "kdtree", nullptr };
   static const char* kCameraTypes[] = { "perspective", "orthographic", "environment", "realistic", nullptr };
-  static const char* kFilmTypes[] = { "image" /*PBRT v3*/, "rgb" /*PBRT v4*/, nullptr };
+  static const char* kFilmTypes[] = { "image" /*PBRT v3*/, "rgb" /*PBRT v4*/, "gbuffer", "spectral", nullptr };
   static const char* kIntegratorTypes[] = { "bdpt", "directlighting", "mlt", "path", "sppm", "whitted", "volpath", "ambientocclusion", nullptr };
   static const char* kPixelFilterTypes[] = { "box", "gaussian", "mitchell", "sinc", "triangle", nullptr };
   static const char* kSamplerTypes[] = { "02sequence", "lowdiscrepancy", "halton", "maxmindist", "random", "sobol", "stratified", nullptr };
@@ -2385,7 +2385,8 @@ namespace minipbrt {
     { ParamType::Normal3,   "normal3",   3, sizeof(float), "normal" },
     { ParamType::RGB,       "rgb",       3, sizeof(float), "color"  },
     { ParamType::XYZ,       "xyz",       3, sizeof(float), nullptr  },
-    { ParamType::Blackbody, "blackbody", 2, sizeof(float), nullptr  },
+    { ParamType::Blackbody, "blackbody", 2, sizeof(float), nullptr  }, // PBRTv3 -> blackbody param consists in 2 floats: temperature and scale
+    //{ ParamType::Blackbody, "blackbody", 1, sizeof(float), nullptr  }, // PBRTv4 -> blackbody param consists in 1 float: temperature (scale is stored in a separated "scale" param) => handle this case in Parser::parse_param
     { ParamType::Samples,   "spectrum",  2, sizeof(float), nullptr  }, // PBRTv3
     //{ ParamType::SPDEnum,   "spectrum",  2, sizeof(float), nullptr  }, // PBRTv4 -> detect if an enum is used when parsing "spectrum" (as ParamType::Samples) and change param type to SPDEnum
     { ParamType::String,    "string",    1, sizeof(char),  nullptr  },
@@ -3317,7 +3318,7 @@ namespace minipbrt {
 
   static inline bool is_keyword_part(char ch)
   {
-    return is_alnum(ch) || ch == '_';
+    return is_alnum(ch) || ch == '_' || ch == '.';
   }
 
 
@@ -7634,7 +7635,17 @@ namespace minipbrt {
       }
       break;
 
-    case TextureType::Dots:
+    case TextureType::DirectionMix:
+      {
+        DirectionMixTexture* directionMix = new DirectionMixTexture();
+        color_texture_param("tex1", &directionMix->tex1);
+        color_texture_param("tex2", &directionMix->tex2);
+        float_array_param("dir", ParamType::Vector3, 3, directionMix->dir);
+        texture = directionMix;
+      }
+      break;
+
+     case TextureType::Dots:
       {
         DotsTexture* dots = new DotsTexture();
         color_texture_param("inside",  &dots->inside);
@@ -7690,6 +7701,19 @@ namespace minipbrt {
       }
       break;
 
+    case TextureType::PTex:
+      {
+        PTexTexture* ptex = new PTexTexture();
+        if (!string_param("filename", &ptex->filename, true)) {
+          m_tokenizer.set_error("Required param \"filename\" is missing");
+          delete ptex;
+          return false;
+        }
+        float_param("gamma", &ptex->gamma);
+        texture = ptex;
+      }
+      break;
+
     case TextureType::Scale:
       {
         ScaleTexture* scale = new ScaleTexture();
@@ -7723,23 +7747,10 @@ namespace minipbrt {
         texture = wrinkled;
       }
       break;
-
-    case TextureType::PTex:
-      {
-        PTexTexture* ptex = new PTexTexture();
-        if (!string_param("filename", &ptex->filename, true)) {
-          m_tokenizer.set_error("Required param \"filename\" is missing");
-          delete ptex;
-          return false;
-        }
-        float_param("gamma", &ptex->gamma);
-        texture = ptex;
-      }
-      break;
     }
 
     if (texture == nullptr) {
-      m_tokenizer.set_error("Failed to create %s texture", kTextureTypes[uint32_t(textureType)]);
+      m_tokenizer.set_error("Failed to create texture");
       return false;
     }
 
@@ -7937,17 +7948,64 @@ namespace minipbrt {
 
     Film* film = nullptr;
 
-    if (filmType == FilmType::Image /*PBRT v3*/ || filmType == FilmType::RGB /*PBRT v4*/)
+    const auto ParsePBRTv4Film = [this](PBRTv4Film * pbrtv4Film)
     {
-      ImageFilm* img = new ImageFilm();
-      int_param("xresolution", &img->xresolution);
-      int_param("yresolution", &img->yresolution);
-      float_array_param("cropwindow", ParamType::Float, 4, img->cropwwindow);
-      float_param("scale", &img->scale);
-      float_param("maxsampleluminance", &img->maxsampleluminance);
-      float_param("diagonal", &img->diagonal);
-      string_param("filename", &img->filename, true);
-      film = img;
+       int_param("xresolution", &pbrtv4Film->xresolution);
+       int_param("yresolution", &pbrtv4Film->yresolution);
+       float_array_param("cropwindow", ParamType::Float, 4, pbrtv4Film->cropwwindow);
+       int_array_param("pixelbounds", 4, pbrtv4Film->pixelbounds);
+       float_param("diagonal", &pbrtv4Film->diagonal);
+       string_param("filename", &pbrtv4Film->filename, true);
+       bool_param("savefp16", &pbrtv4Film->savefp16);
+       float_param("iso", &pbrtv4Film->iso);
+       float_param("whitebalance", &pbrtv4Film->whitebalance);
+       string_param("sensor", &pbrtv4Film->sensor, true);
+       float_param("maxcomponentvalue", &pbrtv4Film->maxcomponentvalue);
+    };
+
+    switch(filmType)
+    {
+        case FilmType::Image:
+        {
+           ImageFilm* img = new ImageFilm();
+           int_param("xresolution", &img->xresolution);
+           int_param("yresolution", &img->yresolution);
+           float_array_param("cropwindow", ParamType::Float, 4, img->cropwwindow);
+           float_param("scale", &img->scale);
+           float_param("maxsampleluminance", &img->maxsampleluminance);
+           float_param("diagonal", &img->diagonal);
+           string_param("filename", &img->filename, true);
+           film = img;
+           break;
+        }
+        
+        case FilmType::RGB:
+        {
+           RGBFilm* rgb = new RGBFilm();
+           ParsePBRTv4Film(rgb);
+           film = rgb;
+           break;
+        }
+        
+        case FilmType::GBuffer:
+        {
+           GBufferFilm* gbuffer = new GBufferFilm();
+           ParsePBRTv4Film(gbuffer);
+           string_param("coordinatesystem", &gbuffer->coordinatesystem, true);
+           film = gbuffer;
+           break;
+        }
+
+        case FilmType::Spectral:
+        {
+           SpectralFilm* spectral = new SpectralFilm();
+           ParsePBRTv4Film(spectral);
+           int_param("numbuckets", &spectral->numbuckets);
+           float_param("lambdamin", &spectral->lambdamin);
+           float_param("lambdamax", &spectral->lambdamax);
+           film = spectral;
+           break;
+        }
     }
 
     if (film == nullptr) {
@@ -8344,10 +8402,16 @@ namespace minipbrt {
       break;
     }
 
-    if (ok && param.type != ParamType::SPDEnum && paramTypeDecl.numComponents > 1 && (param.count % paramTypeDecl.numComponents) != 0) {
-      m_tokenizer.set_error("Wrong number of values for %s with type %s, expected a multiple of %u",
-                            paramNameBuf, paramTypeDecl.name, paramTypeDecl.numComponents);
-      return false;
+    if (ok && paramTypeDecl.numComponents > 1 && (param.count % paramTypeDecl.numComponents) != 0) {
+
+      const bool bPBRTv4IsSPDEnum = (param.type == ParamType::SPDEnum); // PBRT v4: see kParamTypes' declaration comments
+      const bool bPBRTv4Blackbody = (param.type == ParamType::Blackbody) && (param.count == 1); // PBRT v4: see kParamTypes' declaration comments
+      if(!bPBRTv4IsSPDEnum && !bPBRTv4Blackbody)
+      {
+          m_tokenizer.set_error("Wrong number of values for %s with type %s, expected a multiple of %u",
+                                paramNameBuf, paramTypeDecl.name, paramTypeDecl.numComponents);
+          return false;
+      }
     }
 
     if (ok) {
