@@ -256,7 +256,7 @@ namespace minipbrt {
 
 
   struct AreaLight {
-    float scale[3] = { 1.0f, 1.0f, 1.0f };
+    float scale[3] = { 1.0f, 1.0f, 1.0f }; // PBRT v3 (float3) | PBRT v4 (float [0] is replicated to [1] and [2])
 
     virtual ~AreaLight() {}
     virtual AreaLightType type() const = 0;

@@ -6620,7 +6620,12 @@ namespace minipbrt {
     }
 
     // Params common to all area lights.
-    spectrum_param("scale", areaLight->scale);
+    if(spectrum_param("scale", areaLight->scale)) { // PBRT v3
+    }
+    else if(float_param("scale", &areaLight->scale[0])) { // PBRT v4
+        areaLight->scale[1] = areaLight->scale[0];
+        areaLight->scale[2] = areaLight->scale[0];
+    }
 
     m_attrs->top->areaLight = static_cast<uint32_t>(m_scene->areaLights.size());
     m_scene->areaLights.push_back(areaLight);
@@ -6710,7 +6715,14 @@ namespace minipbrt {
     }
 
     save_current_transform_matrices(&light->lightToWorld);
-    spectrum_param("scale", light->scale);
+
+    if(spectrum_param("scale", light->scale)) { // PBRT v3
+    }
+    else if(float_param("scale", &light->scale[0])) { // PBRT v4
+        light->scale[1] = light->scale[0];
+        light->scale[2] = light->scale[0];
+    }
+
     m_scene->lights.push_back(light);
     return true;
   }
@@ -8945,10 +8957,15 @@ namespace minipbrt {
       break;
 
     case ParamType::Blackbody:
-      if (paramDesc->count != 2) {
-        return false;
+      if (paramDesc->count == 2) { // PBRT v3 (temperature and scale are in the same param)
+        blackbody_to_rgb(src[0], src[1], dest);
       }
-      blackbody_to_rgb(src[0], src[1], dest);
+      else if(paramDesc->count == 1) { // PBRT v4 (temperature and scale are separated)
+        blackbody_to_rgb(src[0], 1.f, dest);
+      }
+      else {
+          return false;
+      }
       break;
 
     case ParamType::Samples:
