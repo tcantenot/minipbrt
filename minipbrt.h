@@ -1005,9 +1005,9 @@ namespace minipbrt {
   };
 
   struct DiffuseTransmissionMaterial : public Material { // PBRT v4
-    ColorTex reflectance  = { kInvalidIndex, {0.25f, 0.25f, 0.25f} };
-    ColorTex transmission = { kInvalidIndex, {0.25f, 0.25f, 0.25f} };
-    FloatTex scale        = { kInvalidIndex, 1.0f };
+    ColorTex reflectance   = { kInvalidIndex, {0.25f, 0.25f, 0.25f} };
+    ColorTex transmittance = { kInvalidIndex, {0.25f, 0.25f, 0.25f} };
+    FloatTex scale         = { kInvalidIndex, 1.0f };
 
     virtual ~DiffuseTransmissionMaterial() override {}
     virtual MaterialType type() const override { return MaterialType::DiffuseTransmission; }

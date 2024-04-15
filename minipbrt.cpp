@@ -4734,19 +4734,19 @@ namespace minipbrt {
             {
                 case CurveType::Flat:
                 {
-                    trimesh->name = "Flat Bezier Curve";
+                    trimesh->name = copy_string("Flat Bezier Curve");
                     break;
                 }
 
                 case CurveType::Ribbon:
                 {
-                    trimesh->name = "Ribbon Bezier Curve";
+                    trimesh->name = copy_string("Ribbon Bezier Curve");
                     break;
                 }
 
                 case CurveType::Cylinder:
                 {
-                    trimesh->name = "Cylinder Bezier Curve";
+                    trimesh->name = copy_string("Cylinder Bezier Curve");
                     break;
                 }
             }
@@ -4760,19 +4760,19 @@ namespace minipbrt {
             {
                 case CurveType::Flat:
                 {
-                    trimesh->name = "Flat BSpline Curve";
+                    trimesh->name = copy_string("Flat BSpline Curve");
                     break;
                 }
 
                 case CurveType::Ribbon:
                 {
-                    trimesh->name = "Ribbon BSpline Curve";
+                    trimesh->name = copy_string("Ribbon BSpline Curve");
                     break;
                 }
 
                 case CurveType::Cylinder:
                 {
-                    trimesh->name = "Cylinder BSpline Curve";
+                    trimesh->name = copy_string("Cylinder BSpline Curve");
                     break;
                 }
             }
@@ -4855,6 +4855,7 @@ namespace minipbrt {
     }
 
     trimesh->copy_common_properties(this);
+    trimesh->name = copy_string("heightfield");
 
     return trimesh;
   }
@@ -4878,7 +4879,17 @@ namespace minipbrt {
     trimesh->indices = new int[num_indices];
     std::memcpy(trimesh->indices, indices, sizeof(int) * num_indices);
 
+    // Sanity check
+    #if 0
+    for(int i = 0; i < num_indices; ++i)
+    {
+        const int idx = trimesh->indices[i];
+        assert(idx < num_points);
+    }
+    #endif
+
     trimesh->copy_common_properties(this);
+    trimesh->name = copy_string("loopsubdiv");
 
     return trimesh;
   }
@@ -4929,6 +4940,7 @@ namespace minipbrt {
     }
 
     trimesh->copy_common_properties(this);
+    trimesh->name = copy_string("nurbs");
 
     return trimesh;
   }
@@ -6510,6 +6522,8 @@ namespace minipbrt {
           delete loopsubdiv;
           return false;
         }
+        assert(loopsubdiv->num_points % 3 == 0);
+        loopsubdiv->num_points /= 3;
         shape = loopsubdiv;
       }
       break;
@@ -7051,9 +7065,9 @@ namespace minipbrt {
      case MaterialType::DiffuseTransmission: // PBRT v4
       {
         DiffuseTransmissionMaterial* m = new DiffuseTransmissionMaterial();
-        color_texture_param("reflectance",  &m->reflectance);
-        color_texture_param("transmission", &m->transmission);
-        float_texture_param("scale",        &m->scale);
+        color_texture_param("reflectance",   &m->reflectance);
+        color_texture_param("transmittance", &m->transmittance);
+        float_texture_param("scale",         &m->scale);
         material = m;
       }
       break;
@@ -7404,9 +7418,9 @@ namespace minipbrt {
       {
         const DiffuseTransmissionMaterial* src = dynamic_cast<const DiffuseTransmissionMaterial*>(baseMaterial);
         DiffuseTransmissionMaterial* dst = new DiffuseTransmissionMaterial();
-        color_texture_param_with_default("reflectance",  &dst->reflectance,  &src->reflectance);
-        color_texture_param_with_default("transmission", &dst->transmission, &src->transmission);
-        float_texture_param_with_default("scale",        &dst->scale,        &src->scale);
+        color_texture_param_with_default("reflectance",   &dst->reflectance,   &src->reflectance);
+        color_texture_param_with_default("transmittance", &dst->transmittance, &src->transmittance);
+        float_texture_param_with_default("scale",         &dst->scale,         &src->scale);
         material = dst;
       }
       break;
