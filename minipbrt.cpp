@@ -6479,6 +6479,9 @@ namespace minipbrt {
         if (ok && float_vector_param("uv", ParamType::Float, &count, &trianglemesh->uv, true)) {
           ok = count == trianglemesh->num_vertices * 2;
         }
+        if (ok && float_vector_param("uv", ParamType::Point2, &count, &trianglemesh->uv, true)) { // PBRT v4
+          ok = count == trianglemesh->num_vertices * 2;
+        }
         if (ok && float_vector_param("st", ParamType::Point2, &count, &trianglemesh->uv, true)) {
           ok = count == trianglemesh->num_vertices * 2;
         }
