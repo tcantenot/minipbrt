@@ -3201,6 +3201,25 @@ namespace minipbrt {
     bool parse_WorldBegin();
     bool parse_WorldEnd();
 
+    bool parse_material_reflectance(
+        const char* etaName,
+        ColorTex* eta,
+        const char* kName,
+        ColorTex* k,
+        const char* reflectanceName,
+        ColorTex* reflectance,
+        bool * usereflectance
+    );
+    bool parse_material_roughness(
+        const char* roughnessName,
+        FloatTex* roughness,
+        const char* uroughnessName,
+        FloatTex* uroughness,
+        const char* vroughnessName,
+        FloatTex* vroughness,
+        const char* remaproughnessName,
+        bool * remaproughness
+    );
     bool parse_material_common(MaterialType materialType, const char* materialName, uint32_t* materialOut);
     bool parse_material_overrides(const Material* baseMaterial, uint32_t* materialOut);
     bool has_material_overrides(uint32_t matIdx) const;
@@ -6793,6 +6812,53 @@ namespace minipbrt {
     return false;
   }
 
+  bool Parser::parse_material_reflectance(
+    const char* etaName,
+    ColorTex* eta,
+    const char* kName,
+    ColorTex* k,
+    const char* reflectanceName,
+    ColorTex* reflectance,
+    bool * usereflectance
+  )
+  {
+    color_texture_param(etaName, eta);
+    color_texture_param(kName, k);
+    *usereflectance = color_texture_param(reflectanceName, reflectance);
+    return true;
+  }
+
+  bool Parser::parse_material_roughness(
+    const char* roughnessName,
+    FloatTex* roughness,
+    const char* uroughnessName,
+    FloatTex* uroughness,
+    const char* vroughnessName,
+    FloatTex* vroughness,
+    const char* remaproughnessName,
+    bool * remaproughness
+  )
+  {
+    const bool bParsedRoughness  = float_texture_param(roughnessName,  roughness);
+    const bool bParsedURoughness = float_texture_param(uroughnessName, uroughness);
+    const bool bParsedVRoughness = float_texture_param(vroughnessName, vroughness);
+    
+    if(!bParsedRoughness)
+    {
+        if(bParsedURoughness || bParsedVRoughness)
+            roughness->value = (uroughness->value + vroughness->value) * 0.5f;
+    }
+    
+    if(!bParsedURoughness && !bParsedVRoughness)
+    {
+        if(bParsedRoughness)
+            uroughness->value = vroughness->value = roughness->value;
+    }
+
+    bool_param(remaproughnessName, remaproughness);
+
+    return true;
+  }
 
   bool Parser::parse_material_common(MaterialType materialType, const char* materialName, uint32_t* materialOut)
   {
@@ -6962,9 +7028,12 @@ namespace minipbrt {
         string_param("name",                 &subsurface->name, true); // PBRT v4
         color_texture_param("reflectance",   &subsurface->reflectance); // PBRT v4
         color_texture_param("sigma_s",       &subsurface->sigma_s); // PBRT v4
-        float_texture_param("uroughness",    &subsurface->uroughness);
-        float_texture_param("vroughness",    &subsurface->vroughness);
-        bool_param("remaproughness",         &subsurface->remaproughness);
+        parse_material_roughness(
+          "roughness",  &subsurface->roughness,
+          "uroughness", &subsurface->uroughness,
+          "vroughness", &subsurface->vroughness,
+          "remaproughness", &subsurface->remaproughness
+        );
         material = subsurface;
       }
       break;
@@ -7007,9 +7076,12 @@ namespace minipbrt {
         int_param("nsamples",              &m->nsamples);
         float_param("thickness",           &m->thickness);
         color_texture_param("reflectance", &m->reflectance);
-        float_texture_param("uroughness",  &m->uroughness);
-        float_texture_param("vroughness",  &m->vroughness);
-        bool_param("remaproughness",       &m->remaproughness);
+        parse_material_roughness(
+          "roughness", &m->roughness,
+          "uroughness", &m->uroughness,
+          "vroughness", &m->vroughness,
+          "remaproughness", &m->remaproughness
+        );
         material = m;
       }
       break;
@@ -7022,12 +7094,24 @@ namespace minipbrt {
         int_param("maxdepth",              &m->maxdepth);
         int_param("nsamples",              &m->nsamples);
         float_param("thickness",           &m->thickness);
-        color_texture_param("eta",         &m->eta);
-        color_texture_param("k",           &m->k);
-        color_texture_param("reflectance", &m->reflectance);
-        float_texture_param("uroughness",  &m->uroughness);
-        float_texture_param("vroughness",  &m->vroughness);
-        bool_param("remaproughness",       &m->remaproughness);
+        parse_material_reflectance(
+          "conductor.eta",                 &m->eta,
+          "conductor.k",                   &m->k,
+          "reflectance",                   &m->reflectance,
+          &m->usereflectance
+        );
+        parse_material_roughness(
+          "conductor.roughness",           &m->conductorRoughness,
+          "conductor.uroughness",          &m->conductorURoughness,
+          "conductor.vroughness",          &m->conductorVRoughness,
+          "conductor.remaproughness",      &m->conductorRemapRoughness
+        );
+        parse_material_roughness(
+          "interface.roughness",           &m->interfaceRoughness,
+          "interface.uroughness",          &m->interfaceURoughness,
+          "interface.vroughness",          &m->interfaceVRoughness,
+          "interface.remaproughness",      &m->interfaceRemapRoughness
+        );
         material = m;
       }
       break;
@@ -7037,9 +7121,12 @@ namespace minipbrt {
         DielectricMaterial* m = new DielectricMaterial();
         float_texture_param("eta",         &m->eta);
         //color_texture_param("eta",         &m->eta);
-        float_texture_param("uroughness",  &m->uroughness);
-        float_texture_param("vroughness",  &m->vroughness);
-        bool_param("remaproughness",       &m->remaproughness);
+        parse_material_roughness(
+          "roughness", &m->roughness,
+          "uroughness", &m->uroughness,
+          "vroughness", &m->vroughness,
+          "remaproughness", &m->remaproughness
+        );
         material = m;
       }
       break;
@@ -7047,12 +7134,18 @@ namespace minipbrt {
      case MaterialType::Conductor: // PBRT v4
       {
         ConductorMaterial* m = new ConductorMaterial();
-        color_texture_param("eta",         &m->eta);
-        color_texture_param("k",           &m->k);
-        color_texture_param("reflectance", &m->reflectance);
-        float_texture_param("uroughness",  &m->uroughness);
-        float_texture_param("vroughness",  &m->vroughness);
-        bool_param("remaproughness",       &m->remaproughness);
+        parse_material_reflectance(
+          "eta", &m->eta,
+          "k", &m->k,
+          "reflectance", &m->reflectance,
+          &m->usereflectance
+        );
+        parse_material_roughness(
+          "roughness", &m->roughness,
+          "uroughness", &m->uroughness,
+          "vroughness", &m->vroughness,
+          "remaproughness", &m->remaproughness
+        );
         material = m;
       }
       break;
@@ -7091,9 +7184,12 @@ namespace minipbrt {
         ThinDielectricMaterial* m = new ThinDielectricMaterial();
         float_texture_param("eta",         &m->eta);
         //color_texture_param("eta",         &m->eta);
-        float_texture_param("uroughness",  &m->uroughness);
-        float_texture_param("vroughness",  &m->vroughness);
-        bool_param("remaproughness",       &m->remaproughness);
+        parse_material_roughness(
+          "roughness", &m->roughness,
+          "uroughness", &m->uroughness,
+          "vroughness", &m->vroughness,
+          "remaproughness", &m->remaproughness
+        );
         material = m;
       }
       break;
@@ -7307,6 +7403,7 @@ namespace minipbrt {
         float_texture_param_with_default("eta",           &dst->eta,            &src->eta);
         color_texture_param_with_default("Kr",            &dst->Kr,             &src->Kr);
         color_texture_param_with_default("Kt",            &dst->Kt,             &src->Kt);
+        float_texture_param_with_default("roughness",     &dst->roughness,      &src->roughness);
         float_texture_param_with_default("uroughness",    &dst->uroughness,     &src->uroughness);
         float_texture_param_with_default("vroughness",    &dst->vroughness,     &src->vroughness);
         bool_param_with_default("remaproughness",         &dst->remaproughness, src->remaproughness);
@@ -7374,9 +7471,14 @@ namespace minipbrt {
         color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
         color_texture_param_with_default("k",           &dst->k,              &src->k);
         color_texture_param_with_default("reflectance", &dst->reflectance,    &src->reflectance);
-        float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
-        float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
-        bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
+        float_texture_param_with_default("conductor.roughness",   &dst->conductorRoughness,      &src->conductorRoughness);
+        float_texture_param_with_default("conductor.uroughness",  &dst->conductorURoughness,     &src->conductorURoughness);
+        float_texture_param_with_default("conductor.vroughness",  &dst->conductorVRoughness,     &src->conductorVRoughness);
+        bool_param_with_default("conductor.remaproughness",       &dst->conductorRemapRoughness, &src->conductorRemapRoughness);
+        float_texture_param_with_default("interface.roughness",   &dst->interfaceRoughness,      &src->interfaceRoughness);
+        float_texture_param_with_default("interface.uroughness",  &dst->interfaceURoughness,     &src->interfaceURoughness);
+        float_texture_param_with_default("interface.vroughness",  &dst->interfaceVRoughness,     &src->interfaceVRoughness);
+        bool_param_with_default("interface.remaproughness",       &dst->interfaceRemapRoughness, &src->interfaceRemapRoughness);
         material = dst;
       }
       break;
@@ -7387,6 +7489,7 @@ namespace minipbrt {
         DielectricMaterial* dst = new DielectricMaterial();
         float_texture_param_with_default("eta",         &dst->eta,            &src->eta);
         //color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        float_texture_param_with_default("roughness",   &dst->roughness,      &src->roughness);
         float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
         float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
         bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
@@ -7401,6 +7504,7 @@ namespace minipbrt {
         color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
         color_texture_param_with_default("k",           &dst->k,              &src->k);
         color_texture_param_with_default("reflectance", &dst->reflectance,    &src->reflectance);
+        float_texture_param_with_default("roughness",   &dst->roughness,      &src->roughness);
         float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
         float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
         bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);
@@ -7443,6 +7547,7 @@ namespace minipbrt {
         ThinDielectricMaterial* dst = new ThinDielectricMaterial();
         float_texture_param_with_default("eta",         &dst->eta,            &src->eta);
         //color_texture_param_with_default("eta",         &dst->eta,            &src->eta);
+        float_texture_param_with_default("roughness",   &dst->roughness,      &src->roughness);
         float_texture_param_with_default("uroughness",  &dst->uroughness,     &src->uroughness);
         float_texture_param_with_default("vroughness",  &dst->vroughness,     &src->vroughness);
         bool_param_with_default("remaproughness",       &dst->remaproughness, src->remaproughness);

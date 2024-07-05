@@ -903,6 +903,7 @@ namespace minipbrt {
     char* name              = nullptr; // PBRT v4
     ColorTex reflectance    = { kInvalidIndex, {0.0f, 0.0f, 0.0f} }; // PBRT v4
     ColorTex sigma_s        = { kInvalidIndex, {2.55f, 3.12f, 3.77f} }; // PBRT v4
+    FloatTex roughness      = { kInvalidIndex, 0.0f               };
     FloatTex uroughness     = { kInvalidIndex, 0.0f               };
     FloatTex vroughness     = { kInvalidIndex, 0.0f               };
     bool remaproughness     = true;
@@ -947,6 +948,7 @@ namespace minipbrt {
     int nsamples         = 1;
     float thickness      = 0.01f;
     ColorTex reflectance = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
+    FloatTex roughness   = { kInvalidIndex, 0.0f };
     FloatTex uroughness  = { kInvalidIndex, 0.0f };
     FloatTex vroughness  = { kInvalidIndex, 0.0f };
     bool remaproughness  = true;
@@ -964,9 +966,15 @@ namespace minipbrt {
     ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f}/*TODO: compute sRGB value*/, "metal-Cu-eta" };
     ColorTex k           = { kInvalidIndex, {0.0f, 0.0f, 0.0f}/*TODO: compute sRGB value*/, "metal-Cu-k"   };
     ColorTex reflectance = { kInvalidIndex, {0.5f, 0.5f, 0.5f} };
-    FloatTex uroughness  = { kInvalidIndex, 0.0f };
-    FloatTex vroughness  = { kInvalidIndex, 0.0f };
-    bool remaproughness  = true;
+    FloatTex conductorRoughness   = { kInvalidIndex, 0.0f };
+    FloatTex conductorURoughness  = { kInvalidIndex, 0.0f };
+    FloatTex conductorVRoughness  = { kInvalidIndex, 0.0f };
+    FloatTex interfaceRoughness   = { kInvalidIndex, 0.0f };
+    FloatTex interfaceURoughness  = { kInvalidIndex, 0.0f };
+    FloatTex interfaceVRoughness  = { kInvalidIndex, 0.0f };
+    bool conductorRemapRoughness = true;
+    bool interfaceRemapRoughness = true;
+    bool usereflectance  = false;
 
     virtual ~CoatedConductorMaterial() override {}
     virtual MaterialType type() const override { return MaterialType::CoatedConductor; }
@@ -976,9 +984,11 @@ namespace minipbrt {
     ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} /*TODO: compute sRGB value*/, "metal-Cu-eta"  };
     ColorTex k           = { kInvalidIndex, {0.0f, 0.0f, 0.0f} /*TODO: compute sRGB value*/, "metal-Cu-k"    };
     ColorTex reflectance = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex roughness   = { kInvalidIndex, 0.0f };
     FloatTex uroughness  = { kInvalidIndex, 0.0f };
     FloatTex vroughness  = { kInvalidIndex, 0.0f };
     bool remaproughness  = true;
+    bool usereflectance  = false;
 
     virtual ~ConductorMaterial() override {}
     virtual MaterialType type() const override { return MaterialType::Conductor; }
@@ -989,6 +999,7 @@ namespace minipbrt {
     // TODO: add FloatOrColorTex?
     FloatTex eta         = { kInvalidIndex, 1.5f };
     //ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex roughness   = { kInvalidIndex, 0.0f };
     FloatTex uroughness  = { kInvalidIndex, 0.0f };
     FloatTex vroughness  = { kInvalidIndex, 0.0f };
     bool remaproughness  = true;
@@ -1025,6 +1036,7 @@ namespace minipbrt {
     // TODO: add FloatOrColorTex?
     FloatTex eta         = { kInvalidIndex, 1.5f };
     //ColorTex eta         = { kInvalidIndex, {0.0f, 0.0f, 0.0f} };
+    FloatTex roughness   = { kInvalidIndex, 0.0f };
     FloatTex uroughness  = { kInvalidIndex, 0.0f };
     FloatTex vroughness  = { kInvalidIndex, 0.0f };
     bool remaproughness  = true;
