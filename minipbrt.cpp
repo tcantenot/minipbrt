@@ -2315,6 +2315,8 @@ namespace minipbrt {
   static const char* kTexCoordMappings[] = { "uv", "spherical", "cylindrical", "planar", nullptr };
   static const char* kCheckerboardAAModes[] = { "closedform", "none", nullptr };
   static const char* kWrapModes[] = { "repeat", "black", "clamp", nullptr };
+  static const char* kTextureFilters[] = { "point", "bilinear", "trilinear", "ewa", nullptr }; // PBRTv4
+  static const char* kTextureEncodings[] = { "sRGB", "linear", "gamma val", nullptr }; // PBRTv4
 
 
   static const StatementDeclaration kStatements[] = {
@@ -7807,9 +7809,12 @@ namespace minipbrt {
         }
         typed_enum_param("wrap", kWrapModes, &imagemap->wrap);
         float_param("maxanisotropy", &imagemap->maxanisotropy);
+        typed_enum_param("filter", kTextureFilters, &imagemap->filter); // PBRTv4
+        typed_enum_param("encoding", kTextureEncodings, &imagemap->encoding); // PBRTv4
         bool_param("trilinear",      &imagemap->trilinear);
         float_param("scale",         &imagemap->scale);
         bool_param("gamma",          &imagemap->gamma);
+        bool_param("invert",         &imagemap->invert); // PBRTv4
         texture = imagemap;
       }
       break;

@@ -1429,6 +1429,18 @@ namespace minipbrt {
     Clamp,
   };
 
+  enum class TextureFilter {
+    Point,
+    Bilinear,
+    Trilinear,
+    Ewa
+  };
+  
+  enum class TextureEncoding {
+    sRGB,
+    Linear,
+    GammaVal
+  };
 
   enum class CheckerboardAAMode {
     ClosedForm,
@@ -1537,12 +1549,15 @@ namespace minipbrt {
   
 
   struct ImageMapTexture : public Texture2D {
-    char* filename      = nullptr;
-    WrapMode wrap       = WrapMode::Repeat;
-    float maxanisotropy = 8.0f;
-    bool trilinear      = false;
-    float scale         = 1.0f;
-    bool gamma          = false;
+    char* filename           = nullptr;
+    WrapMode wrap            = WrapMode::Repeat;
+    float maxanisotropy      = 8.0f;
+    TextureFilter filter     = TextureFilter::Bilinear; // PBRTv4
+    TextureEncoding encoding = TextureEncoding::sRGB; // PBRTv4
+    bool trilinear           = false;
+    float scale              = 1.0f;
+    bool gamma               = false;
+    bool invert              = false; // PBRTv4
 
     virtual ~ImageMapTexture() override { delete[] filename; }
     virtual TextureType type() const override { return TextureType::ImageMap; }
