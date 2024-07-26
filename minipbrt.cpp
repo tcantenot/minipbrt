@@ -7902,6 +7902,11 @@ namespace minipbrt {
       float_param("vdelta", &tex2d->vdelta);
       float_array_param("v1", ParamType::Vector3, 3, tex2d->v1);
       float_array_param("v2", ParamType::Vector3, 3, tex2d->v2);
+
+      if(tex2d->mapping == TexCoordMapping::Spherical || tex2d->mapping == TexCoordMapping::Cylindrical || tex2d->mapping == TexCoordMapping::Planar)
+      {
+        save_current_transform_matrices(&tex2d->textureSpaceToRenderingSpace);
+      }
     }
 
     Texture3D* tex3d = dynamic_cast<Texture3D*>(texture);
@@ -9364,6 +9369,19 @@ namespace minipbrt {
         }
       }
       break;
+    }
+
+    // Fallback: search global textures list
+    // -> we can end up here when the texture is declared in another "scope"
+    // (for example inside AttributeBegin/AttributeEnd for 3D textures or 2D texture with spherical/cylindrical/planar mapping)
+    {
+        uint32_t texIdx = 0;
+        for (const Texture* tex: m_scene->textures) {
+            if (tex != nullptr && tex->name != nullptr && std::strcmp(name, tex->name) == 0) {
+              return texIdx;
+            }
+            ++texIdx;
+          }
     }
 
     return kInvalidIndex;

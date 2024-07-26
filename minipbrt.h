@@ -1471,6 +1471,9 @@ namespace minipbrt {
     float v1[3]             = { 1.0f, 0.0f, 0.0f };
     float v2[3]             = { 0.0f, 1.0f, 0.0f };
 
+    // https://pbrt.org/fileformat-v4#textures
+    Transform textureSpaceToRenderingSpace; // PBRTv4: "Rendering space from texture space transformation". Row major (for spherical, cylindrical or planar mapping)
+
     virtual ~Texture2D() override {}
   };
 
