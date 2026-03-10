@@ -2307,7 +2307,7 @@ namespace minipbrt {
   static const char* kIntegratorTypes[] = { "bdpt", "directlighting", "mlt", "path", "sppm", "whitted", "volpath", "ambientocclusion", nullptr };
   static const char* kPixelFilterTypes[] = { "box", "gaussian", "mitchell", "sinc", "triangle", nullptr };
   static const char* kSamplerTypes[] = { "02sequence", "lowdiscrepancy", "halton", "maxmindist", "random", "sobol", "stratified", nullptr };
-  static const char* kMediumTypes[] = { "homogeneous", "heterogeneous", nullptr };
+  static const char* kMediumTypes[] = { "cloud", "homogeneous", "nanovdb", "rgbgrid", "uniformgrid", "heterogeneous", nullptr };
 
   static const char* kLightSampleStrategies[] = { "uniform", "power", "spatial", nullptr };
   static const char* kDirectLightSampleStrategies[] = { "uniform", "power", "spatial", nullptr };
@@ -2317,7 +2317,6 @@ namespace minipbrt {
   static const char* kWrapModes[] = { "repeat", "black", "clamp", nullptr };
   static const char* kTextureFilters[] = { "point", "bilinear", "trilinear", "ewa", nullptr }; // PBRTv4
   static const char* kTextureEncodings[] = { "sRGB", "linear", "gamma val", nullptr }; // PBRTv4
-
 
   static const StatementDeclaration kStatements[] = {
     // Common statements, can appear in both preamble and world section.
@@ -3268,8 +3267,8 @@ namespace minipbrt {
     bool float_texture_param_with_default(const char* name, FloatTex* dest, const FloatTex* defaultVal);
     bool color_texture_param_with_default(const char *name, ColorTex *dest, const ColorTex* defaultVal);
     bool enum_param(const char* name, const char* values[], int* dest);
-    bool spd_enum_string_param(const char* name, char** dest, bool copy=false);
-    bool spd_enum_string_param_with_default(const char* name, char** dest, const char* defaultVal, bool copy=false);
+    bool spd_enum_string_param(const char* name, const char** dest, bool copy=false);
+    bool spd_enum_string_param_with_default(const char* name, const char** dest, const char* defaultVal, bool copy=false);
 
     template <class T>
     bool typed_enum_param(const char* name, const char* values[], T* dest) {
@@ -5758,19 +5757,23 @@ namespace minipbrt {
       m_error = nullptr;
     }
 
-    FileData* fdata = &m_fileData[m_includeDepth];
-    int64_t errorOffset = fdata->bufOffset + static_cast<int64_t>(m_pos - m_buf);
-
     char* errorMessage = new char[size_t(len + 1)];
     va_start(args, fmt);
     vsnprintf(errorMessage, size_t(len + 1), fmt, args);
     va_end(args);
 
-    m_error = new Error(fdata->filename, errorOffset, errorMessage);
+    if (m_fileData)
+    {
+      FileData* fdata = &m_fileData[m_includeDepth];
+      int64_t errorOffset = fdata->bufOffset + static_cast<int64_t>(m_pos - m_buf);
+      m_error = new Error(fdata->filename, errorOffset, errorMessage);
 
-    int64_t errorLine, errorCol;
-    cursor_location(&errorLine, &errorCol);
-    m_error->set_line_and_column(errorLine, errorCol);
+      int64_t errorLine, errorCol;
+      cursor_location(&errorLine, &errorCol);
+      m_error->set_line_and_column(errorLine, errorCol);
+    }
+    else
+      m_error = new Error("", 0, errorMessage);
   }
 
 
@@ -6225,44 +6228,117 @@ namespace minipbrt {
     }
 
     Medium* medium = nullptr;
-    if (mediumType == MediumType::Homogeneous) { // homogeneous
-      medium = new HomogeneousMedium();
-    }
-    else if (mediumType == MediumType::Heterogeneous) { // heterogeneous
-      HeterogeneousMedium* heterogeneous = new HeterogeneousMedium();
-      medium = heterogeneous;
-      float_array_param("p0", ParamType::Point3, 3, heterogeneous->p0);
-      float_array_param("p1", ParamType::Point3, 3, heterogeneous->p1);
-      int_param("nx", &heterogeneous->nx);
-      int_param("ny", &heterogeneous->ny);
-      int_param("nz", &heterogeneous->nz);
-      if (heterogeneous->nx < 1 || heterogeneous->ny < 1 || heterogeneous->nz < 1) {
-        m_tokenizer.set_error("Invalid density grid dimensions for heterogeneous medium '%s'", mediumName);
-        delete medium;
+    switch (mediumType) {
+    case MediumType::Cloud:
+      {
+        CloudMedium* cloud = new CloudMedium();
+        float_param("density", &cloud->density);
+        float_param("frequency", &cloud->frequency);
+        float_param("g", &cloud->g);
+        float_array_param("p0", ParamType::Point3, 3, cloud->p0);
+        float_array_param("p1", ParamType::Point3, 3, cloud->p1);
+        spectrum_param("sigma_a", cloud->sigma_a);
+        spectrum_param("sigma_s", cloud->sigma_s);
+        float_param("wispiness", &cloud->wispiness);
+      }
+      break;
+    case MediumType::Homogeneous:
+      {
+        HomogeneousMedium* homogeneous = new HomogeneousMedium();
+        float_param("g", &homogeneous->g);
+        spectrum_param("Le", homogeneous->Le);
+        float_param("Lescale", &homogeneous->Lescale);
+        string_param("preset", &homogeneous->preset, true);
+        spectrum_param("sigma_a", homogeneous->sigma_a);
+        spectrum_param("sigma_s", homogeneous->sigma_s);
+        float_param("scale", &homogeneous->scale);
+        medium = homogeneous;
+      }
+      break;
+    case MediumType::Nanovdb:
+      {
+        NanoVDBMedium* nanovdb = new NanoVDBMedium();
+        float_param("g", &nanovdb->g);
+        float_param("Lescale", &nanovdb->Lescale);
+        spectrum_param("sigma_a", nanovdb->sigma_a);
+        spectrum_param("sigma_s", nanovdb->sigma_s);
+        float_param("scale", &nanovdb->scale);
+        filename_param("filename", &nanovdb->filename);
+        float_param("temepratureoffset", &nanovdb->temperatureOffset);
+        float_param("temperaturescale", &nanovdb->temperatureScale);
+        medium = nanovdb;
+      }
+      break;
+    case MediumType::RgbGrid:
+      {
+        m_tokenizer.set_error("Medium rgb grid not implemented");
         return false;
       }
+      break;
+    case MediumType::UniformGrid:
+    case MediumType::Heterogeneous:
+      {
+        UniformGridMedium* uniformGrid = new UniformGridMedium();
 
-      const ParamInfo* densityDesc = find_param("density", ParamType::Float);
-      if (densityDesc != nullptr) {
-        uint32_t densityLen = static_cast<uint32_t>(heterogeneous->nx) *
-                              static_cast<uint32_t>(heterogeneous->ny) *
-                              static_cast<uint32_t>(heterogeneous->nz);
-        if (densityDesc->count != densityLen) {
-          m_tokenizer.set_error("Invalid density data for heterogeneous medium '%s'", mediumName);
-          delete medium;
-          return false;
+        // Make sure that for the legacy heterogeneous medium, the defaults
+        // values matches the one described in PBRT-V3 file format.
+        if (mediumType == MediumType::Heterogeneous)
+        {
+          uniformGrid->sigma_a[0] = 0.0011f;
+          uniformGrid->sigma_a[1] = 0.0024f;
+          uniformGrid->sigma_a[2] = 0.014f;
+
+          uniformGrid->sigma_s[0] = 2.55f;
+          uniformGrid->sigma_s[1] = 3.21f;
+          uniformGrid->sigma_s[2] = 3.77f;
         }
-        heterogeneous->density = new float[densityLen];
-        float_array_param("density", ParamType::Float, densityLen, heterogeneous->density);
-      }
-    }
 
-    // Common params for all types.
-    spectrum_param("sigma_a", medium->sigma_a);
-    spectrum_param("sigma_s", medium->sigma_s);
-    string_param("preset", &medium->preset, true);
-    float_param("g", &medium->g);
-    float_param("scale", &medium->scale);
+        float_param("g", &uniformGrid->g);
+        spectrum_param("Le", uniformGrid->Le);
+        float_param("Lescale", &uniformGrid->Lescale);
+        float_array_param("p0", ParamType::Point3, 3, uniformGrid->p0);
+        float_array_param("p1", ParamType::Point3, 3, uniformGrid->p1);
+        int_param("nx", &uniformGrid->nx);
+        int_param("ny", &uniformGrid->ny);
+        int_param("nz", &uniformGrid->nz);
+        string_param("preset", &uniformGrid->preset, true);
+        spectrum_param("sigma_a", uniformGrid->sigma_a);
+        spectrum_param("sigma_s", uniformGrid->sigma_s);
+        float_param("scale", &uniformGrid->scale);
+        float_param("temperatureoffset", &uniformGrid->temperatureOffset);
+        float_param("temperaturescale", &uniformGrid->temperatureScale);
+
+        const ParamInfo* densityDesc = find_param("density", ParamType::Float);
+        if (densityDesc != nullptr) {
+          uint32_t densityLen = static_cast<uint32_t>(uniformGrid->nx) *
+            static_cast<uint32_t>(uniformGrid->ny) *
+            static_cast<uint32_t>(uniformGrid->nz);
+          if (densityDesc->count != densityLen) {
+            m_tokenizer.set_error("Invalid density data for uniform grid medium '%s'", mediumName);
+            delete medium;
+            return false;
+          }
+          uniformGrid->density = new float[densityLen];
+          float_array_param("density", ParamType::Float, densityLen, uniformGrid->density);
+        }
+
+        const ParamInfo* temperatureDesc = find_param("temperature", ParamType::Float);
+        if (temperatureDesc != nullptr) {
+          uint32_t temperatureLen = static_cast<uint32_t>(uniformGrid->nx) *
+            static_cast<uint32_t>(uniformGrid->ny) *
+            static_cast<uint32_t>(uniformGrid->nz);
+          if (temperatureDesc->count != temperatureLen) {
+            m_tokenizer.set_error("Invalid density data for uniform grid medium '%s'", mediumName);
+            delete medium;
+            return false;
+          }
+          uniformGrid->density = new float[temperatureLen];
+          float_array_param("temperature", ParamType::Float, temperatureLen, uniformGrid->temperature);
+        }
+        medium = uniformGrid;
+      }
+      break;
+    }
 
     medium->mediumName = copy_string(string_arg(0));
 
@@ -7835,7 +7911,7 @@ namespace minipbrt {
     case TextureType::ImageMap:
       {
         ImageMapTexture* imagemap = new ImageMapTexture();
-        if (!string_param("filename", &imagemap->filename, true)) {
+        if (!filename_param("filename", &imagemap->filename)) {
           m_tokenizer.set_error("Required parameter \"filename\" is missing");
           delete imagemap;
           return false;
@@ -8132,7 +8208,7 @@ namespace minipbrt {
     {
        int_param("xresolution", &pbrtv4Film->xresolution);
        int_param("yresolution", &pbrtv4Film->yresolution);
-       float_array_param("cropwindow", ParamType::Float, 4, pbrtv4Film->cropwwindow);
+       float_array_param("cropwindow", ParamType::Float, 4, pbrtv4Film->cropwindow);
        int_array_param("pixelbounds", 4, pbrtv4Film->pixelbounds);
        float_param("diagonal", &pbrtv4Film->diagonal);
        string_param("filename", &pbrtv4Film->filename, true);
@@ -8150,7 +8226,7 @@ namespace minipbrt {
            ImageFilm* img = new ImageFilm();
            int_param("xresolution", &img->xresolution);
            int_param("yresolution", &img->yresolution);
-           float_array_param("cropwindow", ParamType::Float, 4, img->cropwwindow);
+           float_array_param("cropwindow", ParamType::Float, 4, img->cropwindow);
            float_param("scale", &img->scale);
            float_param("maxsampleluminance", &img->maxsampleluminance);
            float_param("diagonal", &img->diagonal);
@@ -9293,7 +9369,7 @@ namespace minipbrt {
     return true;
   }
 
-  bool Parser::spd_enum_string_param(const char* name, char** dest, bool copy)
+  bool Parser::spd_enum_string_param(const char* name, const char** dest, bool copy)
   {
     assert(name != nullptr);
     assert(dest != nullptr);
@@ -9312,7 +9388,7 @@ namespace minipbrt {
   }
 
 
-  bool Parser::spd_enum_string_param_with_default(const char* name, char** dest, const char* defaultVal, bool copy)
+  bool Parser::spd_enum_string_param_with_default(const char* name, const char** dest, const char* defaultVal, bool copy)
   {
     if (spd_enum_string_param(name, dest, copy)) {
       return true;
